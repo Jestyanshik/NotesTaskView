@@ -3,6 +3,7 @@ bin/
 obj/
 build-check/
 publish/
+release/
 .vs/
 
 # User and IDE files

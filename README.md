@@ -28,9 +28,26 @@ Windows overlay-приложение для заметок в стиле Task Vi
 - Для framework-dependent build нужен `.NET Desktop Runtime 8`.
 - Для сборки из исходников нужен `.NET SDK 8`.
 
+## Download
+
+Обычному пользователю не нужно скачивать исходный код. Скачайте файл из GitHub Releases:
+
+- `NotesTaskView-Setup.exe` - recommended installer.
+- `NotesTaskView-v1.0.0-win-x64-self-contained.zip` - portable self-contained build.
+
+Self-contained версия не требует установленного .NET Runtime.
+
 ## Installation
 
 Для обычного использования рекомендуется self-contained release или installer script.
+
+Через installer:
+
+1. Скачайте `NotesTaskView-Setup.exe` из GitHub Releases.
+2. Запустите установщик.
+3. Установщик добавит приложение в Start Menu.
+4. Установщик может добавить приложение в автозагрузку Windows.
+5. На неизвестном unsigned exe Windows SmartScreen может показать предупреждение.
 
 Self-contained exe после publish:
 
@@ -59,7 +76,17 @@ Installer копирует приложение в:
 %LOCALAPPDATA%\NotesTaskView
 ```
 
-и создаёт ярлыки в Start Menu и `shell:startup`.
+и создаёт ярлыки в Start Menu и `shell:startup`. Admin rights не требуются.
+
+## Notes folder recovery
+
+- Удаление приложения не удаляет пользовательские заметки.
+- Обычный uninstall не удаляет `%LocalAppData%\NotesTaskView\settings.json`.
+- При переустановке приложение использует старый путь к папке заметок из `settings.json`.
+- Если папка заметок не найдена, приложение покажет внутренний overlay-dialog и предложит создать новую папку, выбрать существующую или найти автоматически.
+- Автопоиск не запускается сам. Он стартует только после нажатия кнопки пользователем.
+- Автопоиск сканирует только безопасные пользовательские папки: Documents, Desktop, UserProfile, LocalApplicationData, ApplicationData и OneDrive, если он настроен.
+- Автопоиск не сканирует `C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)` и корни всех дисков без подтверждения.
 
 ## Build from source
 
@@ -152,17 +179,29 @@ Default notes folder is configured in [appsettings.json](./appsettings.json):
 }
 ```
 
-Runtime UI settings are stored in `user-settings.json` next to the running exe. This file is intentionally ignored by git.
+Runtime UI settings are stored in:
 
-Default overlay dim opacity for a new installation is `0.75` / 75%. If an older `user-settings.json` already exists, it can override new defaults. To reset defaults, delete the local `user-settings.json` next to the exe or change the value in the application settings UI.
+```text
+%LocalAppData%\NotesTaskView\settings.json
+```
+
+This file is intentionally ignored by git and survives normal uninstall/reinstall.
+
+Default overlay dim opacity for a new installation is `0.75` / 75%. If `settings.json` already exists, it can override new defaults. To reset defaults, delete `%LocalAppData%\NotesTaskView\settings.json` or change the value in the application settings UI.
 
 ## Installer
 
 Installer-related files:
 
 - `installer\install.ps1` - copies the self-contained exe to `%LOCALAPPDATA%\NotesTaskView`, creates Start Menu and Startup shortcuts.
-- `installer\uninstall.ps1` - removes shortcuts and `%LOCALAPPDATA%\NotesTaskView`.
+- `installer\uninstall.ps1` - removes shortcuts and installed app files. It keeps `settings.json` by default.
 - `installer\NotesTaskView.iss` - Inno Setup script.
+
+Remove user settings explicitly:
+
+```powershell
+.\installer\uninstall.ps1 -RemoveUserSettings
+```
 
 To build an installer exe from `.iss`, install Inno Setup and compile:
 

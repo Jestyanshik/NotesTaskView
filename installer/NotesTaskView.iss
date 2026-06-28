@@ -26,9 +26,12 @@ Source: "..\publish\win-x64-self-contained\NotesTaskView.exe"; DestDir: "{app}";
 Source: "..\publish\win-x64-self-contained\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\Assets\app-icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
+[Tasks]
+Name: "autostart"; Description: "Запускать NotesTaskView вместе с Windows"; GroupDescription: "Автозагрузка:"; Flags: checkedonce
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\app-icon.ico"
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\app-icon.ico"
+Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\app-icon.ico"; Tasks: autostart
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent

@@ -125,7 +125,6 @@ public sealed class NoteService : IDisposable
 
     public string ResolveFolderOrRoot(string? folderPath)
     {
-        Directory.CreateDirectory(_config.NotesFolderPath);
         if (string.IsNullOrWhiteSpace(folderPath))
         {
             return Path.GetFullPath(_config.NotesFolderPath);

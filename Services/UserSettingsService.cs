@@ -5,8 +5,19 @@ namespace NotesTaskView.Services;
 
 public sealed class UserSettingsService
 {
-    private const string SettingsFileName = "user-settings.json";
-    private readonly string _settingsPath = Path.Combine(AppContext.BaseDirectory, SettingsFileName);
+    private const string SettingsFileName = "settings.json";
+    private const string LegacySettingsFileName = "user-settings.json";
+    private readonly string _settingsDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "NotesTaskView");
+    private readonly string _settingsPath;
+
+    public UserSettingsService()
+    {
+        _settingsPath = Path.Combine(_settingsDirectory, SettingsFileName);
+    }
+
+    public string SettingsPath => _settingsPath;
 
     public UserSettings Load(AppConfig appConfig)
     {
@@ -14,6 +25,12 @@ public sealed class UserSettingsService
 
         if (!File.Exists(_settingsPath))
         {
+            MigrateLegacySettingsIfPossible();
+        }
+
+        if (!File.Exists(_settingsPath))
+        {
+            Directory.CreateDirectory(_settingsDirectory);
             Save(settings);
             return settings;
         }
@@ -44,6 +61,7 @@ public sealed class UserSettingsService
     {
         var defaults = new UserSettings();
         NormalizeSettings(settings, defaults);
+        Directory.CreateDirectory(_settingsDirectory);
 
         var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions
         {
@@ -96,12 +114,31 @@ public sealed class UserSettingsService
 
             var brokenPath = Path.Combine(
                 Path.GetDirectoryName(_settingsPath)!,
-                $"user-settings.broken.{DateTime.Now:yyyyMMdd-HHmmss}.json");
+                $"settings.broken.{DateTime.Now:yyyyMMdd-HHmmss}.json");
             File.Move(_settingsPath, brokenPath, true);
         }
         catch
         {
             // Loading must fall back to defaults even if backup fails.
+        }
+    }
+
+    private void MigrateLegacySettingsIfPossible()
+    {
+        try
+        {
+            var legacyPath = Path.Combine(AppContext.BaseDirectory, LegacySettingsFileName);
+            if (!File.Exists(legacyPath))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(_settingsDirectory);
+            File.Copy(legacyPath, _settingsPath, overwrite: false);
+        }
+        catch
+        {
+            // If migration fails, default settings will be created in the stable location.
         }
     }
 

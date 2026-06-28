@@ -555,7 +555,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public async Task CreateNoteFromDialogAsync()
     {
-        await ShowOverlayAsync();
+        if (!await ShowOverlayAsync())
+        {
+            return;
+        }
+
         await CreateNoteInCurrentFolderAsync();
     }
 
@@ -565,9 +569,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await ShowErrorAsync(title, message);
     }
 
-    private async Task ShowOverlayAsync()
+    private async Task<bool> ShowOverlayAsync()
     {
-        await LoadItemsAsync();
         WindowState = WindowState.Maximized;
         ShowInTaskbar = false;
 
@@ -579,6 +582,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Activate();
         Focus();
 
+        if (!await EnsureNotesFolderReadyAsync())
+        {
+            return false;
+        }
+
+        await LoadItemsAsync();
+
         if (EditorVisibility == Visibility.Visible)
         {
             _ = Dispatcher.BeginInvoke(() => EditorTextBox.Focus(), DispatcherPriority.Input);
@@ -587,6 +597,286 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             FocusItemsHost();
         }
+
+        return true;
+    }
+
+    private async Task<bool> EnsureNotesFolderReadyAsync()
+    {
+        if (Directory.Exists(_settings.NotesDirectory))
+        {
+            return true;
+        }
+
+        while (!Directory.Exists(_settings.NotesDirectory))
+        {
+            var choice = await ShowChoiceAsync(
+                "Выберите папку для заметок",
+                "Текущая папка заметок не найдена. Заметки не удалены: выберите старую папку или создайте новую.",
+                ("default", "Создать папку по умолчанию\nDocuments\\NotesTaskView", false),
+                ("choose", "Выбрать существующую папку\nВведите путь к папке вручную", false),
+                ("search", "Найти автоматически\nБезопасный поиск только в пользовательских папках", false));
+
+            switch (choice)
+            {
+                case "default":
+                    if (TryCreateDefaultNotesFolder(out var defaultPath, out var createError))
+                    {
+                        ApplyNotesDirectory(defaultPath);
+                        return true;
+                    }
+
+                    await ShowErrorAsync("Папка заметок", createError);
+                    break;
+
+                case "choose":
+                    if (await TryChooseExistingNotesFolderAsync())
+                    {
+                        return true;
+                    }
+                    break;
+
+                case "search":
+                    if (await TryFindExistingNotesFolderAsync())
+                    {
+                        return true;
+                    }
+                    break;
+
+                default:
+                    Hide();
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool TryCreateDefaultNotesFolder(out string path, out string error)
+    {
+        path = Path.Combine(GetDocumentsFolder(), "NotesTaskView");
+        error = string.Empty;
+
+        try
+        {
+            Directory.CreateDirectory(path);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"Не удалось создать папку по умолчанию: {ex.Message}";
+            return false;
+        }
+    }
+
+    private async Task<bool> TryChooseExistingNotesFolderAsync()
+    {
+        var selectedPath = await ShowPromptAsync(
+            "Выбрать существующую папку",
+            "Введите полный путь к папке с заметками.",
+            "Сохранить",
+            _settings.NotesDirectory);
+
+        if (string.IsNullOrWhiteSpace(selectedPath))
+        {
+            return false;
+        }
+
+        var expandedPath = Environment.ExpandEnvironmentVariables(selectedPath.Trim());
+        if (!Directory.Exists(expandedPath))
+        {
+            await ShowErrorAsync("Папка заметок", "Такая папка не найдена.");
+            return false;
+        }
+
+        ApplyNotesDirectory(expandedPath);
+        return true;
+    }
+
+    private async Task<bool> TryFindExistingNotesFolderAsync()
+    {
+        ShowStatus("Ищем папки с заметками...", true);
+        var candidates = await FindNotesFolderCandidatesAsync(CancellationToken.None);
+        ShowStatus(string.Empty, false);
+
+        if (candidates.Count == 0)
+        {
+            await ShowErrorAsync("Автопоиск", "Подходящие папки с заметками не найдены в пользовательских папках.");
+            return false;
+        }
+
+        var choices = candidates
+            .Take(8)
+            .Select((candidate, index) => (
+                Id: index.ToString(),
+                Text: $"{candidate.CandidatePath}{Environment.NewLine}{candidate.TxtCount} txt · order: {(candidate.HasOrderFile ? "yes" : "no")} · {candidate.LastModified:g}",
+                Danger: false))
+            .Append(("cancel", "Назад", false))
+            .ToArray();
+
+        var result = await ShowChoiceAsync(
+            "Найдены папки с заметками",
+            "Выберите папку, которую нужно использовать.",
+            choices);
+
+        if (!int.TryParse(result, out var selectedIndex) || selectedIndex < 0 || selectedIndex >= candidates.Count)
+        {
+            return false;
+        }
+
+        ApplyNotesDirectory(candidates[selectedIndex].CandidatePath);
+        return true;
+    }
+
+    private static Task<IReadOnlyList<NotesFolderCandidate>> FindNotesFolderCandidatesAsync(CancellationToken cancellationToken)
+    {
+        return Task.Run<IReadOnlyList<NotesFolderCandidate>>(() =>
+        {
+            const int maxDepth = 5;
+            const int maxScannedDirectories = 5000;
+            var roots = GetSafeSearchRoots();
+            var candidates = new Dictionary<string, NotesFolderCandidate>(StringComparer.OrdinalIgnoreCase);
+            var queue = new Queue<(string Path, int Depth)>();
+
+            foreach (var root in roots)
+            {
+                if (Directory.Exists(root))
+                {
+                    queue.Enqueue((Path.GetFullPath(root), 0));
+                }
+            }
+
+            var scanned = 0;
+            while (queue.Count > 0 && scanned < maxScannedDirectories)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var (path, depth) = queue.Dequeue();
+                scanned++;
+
+                if (IsNotesFolderCandidate(path, out var candidate))
+                {
+                    candidates[path] = candidate;
+                }
+
+                if (depth >= maxDepth)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    foreach (var child in Directory.EnumerateDirectories(path))
+                    {
+                        if (!IsSystemPath(child))
+                        {
+                            queue.Enqueue((child, depth + 1));
+                        }
+                    }
+                }
+                catch
+                {
+                    // Some user folders can be unavailable; skip them without interrupting the search.
+                }
+            }
+
+            return candidates.Values
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenByDescending(candidate => candidate.LastModified)
+                .ToList();
+        }, cancellationToken);
+    }
+
+    private static bool IsNotesFolderCandidate(string path, out NotesFolderCandidate candidate)
+    {
+        candidate = new NotesFolderCandidate(path, 0, false, DateTime.MinValue, 0);
+
+        try
+        {
+            var directory = new DirectoryInfo(path);
+            var hasOrderFile = File.Exists(Path.Combine(path, ".notes-order.json"));
+            var txtFiles = Directory.EnumerateFiles(path, "*.txt", SearchOption.TopDirectoryOnly)
+                .Select(file => new FileInfo(file))
+                .Where(file => file.Exists)
+                .Take(50)
+                .ToList();
+            var txtCount = txtFiles.Count;
+            var hasSubdirectories = Directory.EnumerateDirectories(path).Any();
+            var knownName = directory.Name.Equals("Notes", StringComparison.OrdinalIgnoreCase) ||
+                            directory.Name.Equals("NotesTaskView", StringComparison.OrdinalIgnoreCase) ||
+                            directory.Name.Equals("Заметки", StringComparison.OrdinalIgnoreCase);
+
+            if (!hasOrderFile && !knownName && txtCount < 2 && !(txtCount > 0 && hasSubdirectories))
+            {
+                return false;
+            }
+
+            var lastModified = txtFiles.Count == 0
+                ? directory.LastWriteTime
+                : txtFiles.Max(file => file.LastWriteTime);
+            var score = (hasOrderFile ? 100 : 0) +
+                        (knownName ? 40 : 0) +
+                        Math.Min(txtCount, 20) +
+                        (hasSubdirectories ? 5 : 0);
+            candidate = new NotesFolderCandidate(path, txtCount, hasOrderFile, lastModified, score);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static IReadOnlyList<string> GetSafeSearchRoots()
+    {
+        var roots = new List<string?>
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetEnvironmentVariable("OneDrive")
+        };
+
+        return roots
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => Path.GetFullPath(path!))
+            .Where(path => Directory.Exists(path) && !IsSystemPath(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static bool IsSystemPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar);
+        var systemPaths = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+        };
+
+        return systemPaths
+            .Where(systemPath => !string.IsNullOrWhiteSpace(systemPath))
+            .Select(systemPath => Path.GetFullPath(systemPath).TrimEnd(Path.DirectorySeparatorChar))
+            .Any(systemPath => fullPath.StartsWith(systemPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string GetDocumentsFolder()
+    {
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        return string.IsNullOrWhiteSpace(documents)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Documents")
+            : documents;
+    }
+
+    private void ApplyNotesDirectory(string notesDirectory)
+    {
+        _settings.NotesDirectory = Path.GetFullPath(Environment.ExpandEnvironmentVariables(notesDirectory.Trim()));
+        _userSettingsService.Save(_settings);
+        _noteService.UpdateNotesFolder(_settings.NotesDirectory);
+        _currentFolderPath = _noteService.ResolveFolderOrRoot(_settings.NotesDirectory);
+        UpdatePathState();
     }
 
     private async Task<bool> TryHideOverlayAsync()
@@ -5494,6 +5784,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         public Visibility NoteIconVisibility => Icon == "TXT" ? Visibility.Visible : Visibility.Collapsed;
 
         public Visibility FallbackIconVisibility => Icon is "DIR" or "TXT" ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private sealed class NotesFolderCandidate(
+        string candidatePath,
+        int txtCount,
+        bool hasOrderFile,
+        DateTime lastModified,
+        int score)
+    {
+        public string CandidatePath { get; } = candidatePath;
+
+        public int TxtCount { get; } = txtCount;
+
+        public bool HasOrderFile { get; } = hasOrderFile;
+
+        public DateTime LastModified { get; } = lastModified;
+
+        public int Score { get; } = score;
     }
 
     public sealed class FolderChoiceItem : INotifyPropertyChanged
