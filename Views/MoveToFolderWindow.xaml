@@ -1,0 +1,75 @@
+<Window
+    x:Class="NotesTaskView.Views.MoveToFolderWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="clr-namespace:NotesTaskView.Models"
+    Title="Переместить в папку"
+    Width="500"
+    Height="520"
+    WindowStartupLocation="CenterOwner"
+    WindowStyle="None"
+    ResizeMode="NoResize"
+    AllowsTransparency="True"
+    Background="Transparent"
+    ShowInTaskbar="False"
+    Topmost="True"
+    FontFamily="Segoe UI"
+    PreviewKeyDown="Window_PreviewKeyDown">
+    <Border
+        Margin="20"
+        Padding="24"
+        Background="#F0111118"
+        BorderBrush="#3630303A"
+        BorderThickness="1"
+        CornerRadius="20">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock
+                Text="Переместить в папку"
+                Foreground="{StaticResource PrimaryTextBrush}"
+                FontSize="24"
+                FontWeight="SemiBold" />
+
+            <ListBox
+                x:Name="FoldersListBox"
+                Grid.Row="1"
+                Margin="0,18,0,18"
+                Background="#FF181820"
+                BorderBrush="#FF30303A"
+                Foreground="{StaticResource PrimaryTextBrush}"
+                ItemsSource="{Binding Folders}"
+                MouseDoubleClick="FoldersListBox_OnMouseDoubleClick">
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type models:FolderItem}">
+                        <TextBlock
+                            Padding="8"
+                            Text="{Binding RelativePath}"
+                            TextTrimming="CharacterEllipsis" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <StackPanel
+                Grid.Row="2"
+                HorizontalAlignment="Right"
+                Orientation="Horizontal">
+                <Button
+                    Width="100"
+                    Margin="0,0,10,0"
+                    Click="CancelButton_OnClick"
+                    Style="{StaticResource ActionButtonStyle}"
+                    Content="Отмена" />
+                <Button
+                    Width="130"
+                    Click="MoveButton_OnClick"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Content="Переместить" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

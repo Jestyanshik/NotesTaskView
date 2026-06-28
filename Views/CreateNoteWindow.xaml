@@ -1,0 +1,74 @@
+<Window
+    x:Class="NotesTaskView.Views.CreateNoteWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Новая заметка"
+    Width="460"
+    Height="260"
+    WindowStartupLocation="CenterOwner"
+    WindowStyle="None"
+    ResizeMode="NoResize"
+    AllowsTransparency="True"
+    Background="Transparent"
+    ShowInTaskbar="False"
+    Topmost="True"
+    FontFamily="Segoe UI"
+    KeyDown="Window_KeyDown">
+    <Border
+        Margin="20"
+        Padding="24"
+        Background="#F0111118"
+        BorderBrush="#3630303A"
+        BorderThickness="1"
+        CornerRadius="20">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel>
+                <TextBlock
+                    Text="Введите название заметки"
+                    Foreground="{StaticResource PrimaryTextBrush}"
+                    FontSize="22"
+                    FontWeight="SemiBold" />
+                <TextBlock
+                    Margin="0,8,0,0"
+                    Text="Можно оставить пустым — будет дата"
+                    Foreground="{StaticResource SecondaryTextBrush}"
+                    FontSize="13" />
+            </StackPanel>
+
+            <TextBox
+                x:Name="TitleTextBox"
+                Grid.Row="1"
+                Margin="0,18,0,16"
+                Padding="14,12"
+                VerticalAlignment="Center"
+                Background="#FF181820"
+                BorderBrush="#FF30303A"
+                Foreground="{StaticResource PrimaryTextBrush}"
+                CaretBrush="{StaticResource PrimaryTextBrush}"
+                FontSize="15" />
+
+            <StackPanel
+                Grid.Row="2"
+                HorizontalAlignment="Right"
+                Orientation="Horizontal">
+                <Button
+                    Width="100"
+                    Margin="0,0,10,0"
+                    Click="CancelButton_OnClick"
+                    Style="{StaticResource ActionButtonStyle}"
+                    Content="Отмена" />
+                <Button
+                    Width="110"
+                    Click="CreateButton_OnClick"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Content="Создать" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

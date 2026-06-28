@@ -1,0 +1,38 @@
+# Build output
+bin/
+obj/
+build-check/
+publish/
+.vs/
+
+# User and IDE files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs and diagnostics
+crash.log
+drag-debug.log
+app-debug.log
+*.log
+*.tmp
+
+# Local runtime settings and user data
+user-settings*.json
+settings.json
+D:/Notes/
+D:\Notes/
+Notes/
+.notes-order.json
+.trash/
+
+# Local archives and scratch files
+*.zip
+*.7z
+*.rar
+*.bak
+*.testbak
+
+# Design references kept outside release sources
+* reference.png

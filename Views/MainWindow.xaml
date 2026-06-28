@@ -1,0 +1,1319 @@
+<Window
+    x:Class="NotesTaskView.Views.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="clr-namespace:NotesTaskView.Models"
+    xmlns:controls="clr-namespace:NotesTaskView.Controls"
+    mc:Ignorable="d"
+    Title="Мои заметки"
+    WindowStyle="None"
+    ResizeMode="NoResize"
+    AllowsTransparency="True"
+    Background="Transparent"
+    Topmost="True"
+    ShowInTaskbar="False"
+    ShowActivated="True"
+    WindowState="Maximized"
+    FontFamily="Segoe UI"
+    PreviewKeyDown="Window_PreviewKeyDown"
+    PreviewKeyUp="Window_PreviewKeyUp"
+    PreviewMouseLeftButtonUp="Window_PreviewMouseLeftButtonUp"
+    PreviewMouseUp="Window_PreviewMouseUp"
+    Deactivated="Window_Deactivated">
+    <Window.Resources>
+        <Style x:Key="HeaderButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="MinWidth" Value="110" />
+        </Style>
+
+        <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="19" />
+        </Style>
+
+        <Style x:Key="CardDeleteButtonStyle" TargetType="Button" BasedOn="{StaticResource DangerButtonStyle}">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="OverlayListBoxItemStyle" TargetType="ListBoxItem">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SelectableNoteCardStyle" TargetType="Border" BasedOn="{StaticResource OverlayCardStyle}">
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsDragging}" Value="True">
+                    <Setter Property="Opacity" Value="0.35" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="BorderBrush" Value="{Binding SelectionOutlineBrush, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <Setter Property="Background" Value="#F0333340" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsFocused}" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSelected}" Value="True" />
+                        <Condition Binding="{Binding IsFocused}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="BorderBrush" Value="{Binding SelectionOutlineBrush, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <Setter Property="Background" Value="#F0444058" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SelectableFolderCardStyle" TargetType="Border" BasedOn="{StaticResource FolderCardStyle}">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#22FFFFFF" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsDragging}" Value="True">
+                    <Setter Property="Opacity" Value="0.35" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
+                    <Setter Property="BorderThickness" Value="2" />
+                    <Setter Property="BorderBrush" Value="{StaticResource AccentBrushHover}" />
+                    <Setter Property="Background" Value="#F03A3450" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="BorderThickness" Value="2" />
+                    <Setter Property="BorderBrush" Value="{Binding SelectionOutlineBrush, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <Setter Property="Background" Value="#F0383448" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsFocused}" Value="True">
+                    <Setter Property="BorderThickness" Value="2" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSelected}" Value="True" />
+                        <Condition Binding="{Binding IsFocused}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="BorderThickness" Value="2" />
+                    <Setter Property="BorderBrush" Value="{Binding SelectionOutlineBrush, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <Setter Property="Background" Value="#F048405C" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <DataTemplate x:Key="FolderChoiceTileTemplate">
+            <Button
+                Width="132"
+                Height="142"
+                Padding="0"
+                Background="Transparent"
+                BorderThickness="0"
+                Click="FolderChoiceTile_OnClick"
+                Tag="{Binding}">
+                <Border
+                    Padding="10"
+                    Background="{Binding BackgroundBrush}"
+                    BorderBrush="{Binding BorderBrush}"
+                    BorderThickness="2"
+                    CornerRadius="14">
+                    <StackPanel>
+                        <controls:FolderIconControl Width="58" Height="46" HorizontalAlignment="Center" />
+                        <TextBlock
+                            Margin="0,8,0,0"
+                            Text="{Binding Name}"
+                            Foreground="{StaticResource PrimaryTextBrush}"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap"
+                            TextTrimming="CharacterEllipsis"
+                            MaxHeight="38" />
+                        <TextBlock
+                            Margin="0,5,0,0"
+                            Text="{Binding Subtitle}"
+                            Foreground="{StaticResource SecondaryTextBrush}"
+                            FontSize="11"
+                            TextAlignment="Center"
+                            TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PreviewTileTemplate">
+            <Border
+                Width="166"
+                Height="72"
+                Margin="0,0,10,10"
+                Padding="8"
+                Background="#F02A2A32"
+                BorderBrush="#22FFFFFF"
+                BorderThickness="1"
+                CornerRadius="12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid Width="44" Height="44" VerticalAlignment="Center" ClipToBounds="False">
+                        <controls:FolderIconControl Width="30" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding FolderIconVisibility}" />
+                        <controls:NoteIconControl Width="28" Height="31" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoteIconVisibility}" />
+                        <TextBlock Text="!" Foreground="{DynamicResource AccentBrush}" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding FallbackIconVisibility}" />
+                    </Grid>
+                    <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <TextBlock
+                            Text="{Binding Name}"
+                            Foreground="{StaticResource PrimaryTextBrush}"
+                            FontSize="12"
+                            FontWeight="SemiBold"
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            Margin="0,4,0,0"
+                            Text="{Binding Subtitle}"
+                            Foreground="{StaticResource SecondaryTextBrush}"
+                            FontSize="11"
+                            TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type models:SearchResultItem}">
+            <Border
+                Width="304"
+                Height="170"
+                Margin="0,0,18,18"
+                Padding="14"
+                MouseLeftButtonUp="SearchResultCard_OnMouseLeftButtonUp"
+                Style="{StaticResource SelectableNoteCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="82" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="74" Height="70" HorizontalAlignment="Left" VerticalAlignment="Top">
+                            <controls:FolderIconControl Width="66" Height="52" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding FolderIconVisibility}" />
+                            <controls:NoteIconControl Width="54" Height="60" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoteIconVisibility}" />
+                        </Grid>
+                        <StackPanel Grid.Column="1" Margin="8,2,0,0">
+                            <TextBlock Text="{Binding Title}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="42" />
+                            <TextBlock Margin="0,4,0,0" Text="{Binding RelativeFolder}" Foreground="{StaticResource SecondaryTextBrush}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Grid.Row="1" Margin="0,8,0,0" Text="{Binding Snippet}" Foreground="{StaticResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="42" />
+                    <TextBlock Grid.Row="2" Text="{Binding MatchBadge}" Foreground="{DynamicResource AccentBrush}" FontSize="12" FontWeight="SemiBold" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type models:DragPlaceholderItem}">
+            <Border
+                Width="304"
+                Height="170"
+                Margin="0,0,18,18"
+                Background="{DynamicResource AccentVerySoftBrush}"
+                BorderBrush="{DynamicResource AccentBorderBrush}"
+                BorderThickness="2"
+                CornerRadius="14"
+                Opacity="0.75">
+                <Grid>
+                    <TextBlock Text="{Binding Label}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource SecondaryTextBrush}" FontSize="14" FontWeight="SemiBold" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type models:FolderItem}">
+            <Border
+                Width="304"
+                Height="170"
+                Margin="0,0,18,18"
+                Padding="18"
+                AllowDrop="True"
+                DragOver="FolderCard_OnDragOver"
+                Drop="FolderCard_OnDrop"
+                MouseLeftButtonDown="FolderCard_OnMouseLeftButtonDown"
+                MouseLeftButtonUp="FolderCard_OnMouseLeftButtonUp"
+                MouseDown="FolderCard_OnMouseDown"
+                MouseUp="Card_OnMouseUp"
+                MouseRightButtonUp="FolderCard_OnMouseRightButtonUp"
+                PreviewMouseMove="FolderCard_OnPreviewMouseMove"
+                Style="{StaticResource SelectableFolderCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Margin="0,0,38,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="112" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <controls:FolderIconControl Margin="-8,-4,8,0" />
+                        <StackPanel Grid.Column="1" Margin="4,8,0,0">
+                            <TextBlock
+                                Text="Папка"
+                                Foreground="{DynamicResource AccentBrush}"
+                                FontSize="12"
+                                FontWeight="SemiBold" />
+                        <TextBlock
+                            Margin="0,10,0,0"
+                            Text="{Binding Name}"
+                            Foreground="{StaticResource PrimaryTextBrush}"
+                            FontSize="22"
+                            FontWeight="SemiBold"
+                            TextWrapping="Wrap"
+                            TextTrimming="CharacterEllipsis"
+                            MaxHeight="58" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock
+                        Grid.Row="1"
+                        Text="{Binding DisplayItemCount}"
+                        Foreground="{StaticResource SecondaryTextBrush}"
+                        FontSize="12"
+                        TextTrimming="CharacterEllipsis" />
+
+                    <Button
+                        Tag="{Binding}"
+                        Click="DeleteFolderButton_OnClick"
+                        Style="{StaticResource CardDeleteButtonStyle}">
+                        <Grid Width="11" Height="11">
+                            <Line X1="1" Y1="1" X2="10" Y2="10" Stroke="{StaticResource PrimaryTextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                            <Line X1="10" Y1="1" X2="1" Y2="10" Stroke="{StaticResource PrimaryTextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        </Grid>
+                    </Button>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type models:NoteItem}">
+            <Border
+                Width="304"
+                Height="170"
+                Margin="0,0,18,18"
+                Padding="18"
+                AllowDrop="True"
+                DragOver="ItemCard_OnDragOver"
+                Drop="NoteCard_OnDrop"
+                MouseLeftButtonDown="NoteCard_OnMouseLeftButtonDown"
+                MouseLeftButtonUp="NoteCard_OnMouseLeftButtonUp"
+                MouseDown="NoteCard_OnMouseDown"
+                MouseUp="Card_OnMouseUp"
+                MouseRightButtonUp="NoteCard_OnMouseRightButtonUp"
+                PreviewMouseMove="NoteCard_OnPreviewMouseMove"
+                Style="{StaticResource SelectableNoteCardStyle}">
+                <Grid>
+                    <Button
+                        Tag="{Binding FullPath}"
+                        Click="DeleteButton_OnClick"
+                        Style="{StaticResource CardDeleteButtonStyle}">
+                        <Grid Width="11" Height="11">
+                            <Line X1="1" Y1="1" X2="10" Y2="10" Stroke="{StaticResource PrimaryTextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                            <Line X1="10" Y1="1" X2="1" Y2="10" Stroke="{StaticResource PrimaryTextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        </Grid>
+                    </Button>
+
+                    <Grid Margin="0,0,38,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <controls:NoteIconControl Margin="-2,-4,10,0" VerticalAlignment="Top" />
+                        <Grid Grid.Column="1" Margin="8,6,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="18" />
+                                <RowDefinition Height="58" />
+                                <RowDefinition Height="22" />
+                                <RowDefinition Height="20" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TextBlock
+                                Text="Заметка"
+                                Foreground="{StaticResource SecondaryTextBrush}"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Grid.Row="1"
+                                Margin="0,6,0,0"
+                                Text="{Binding Title}"
+                                Foreground="{StaticResource PrimaryTextBrush}"
+                                FontSize="19"
+                                FontWeight="SemiBold"
+                                TextWrapping="Wrap"
+                                TextTrimming="CharacterEllipsis"
+                                MaxHeight="52" />
+                            <TextBlock
+                                Grid.Row="2"
+                                Text="{Binding DisplayModified}"
+                                Foreground="{StaticResource SecondaryTextBrush}"
+                                FontSize="12"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Grid.Row="3"
+                                Text="{Binding DisplaySize}"
+                                Foreground="{StaticResource SecondaryTextBrush}"
+                                FontSize="12"
+                                TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid
+        x:Name="RootGrid"
+        Background="Transparent"
+        AllowDrop="True"
+        PreviewMouseLeftButtonDown="RootGrid_OnPreviewMouseLeftButtonDown"
+        PreviewMouseMove="RootGrid_OnPreviewMouseMove"
+        MouseMove="RootGrid_OnMouseMove"
+        PreviewMouseLeftButtonUp="RootGrid_OnPreviewMouseLeftButtonUp"
+        MouseLeftButtonUp="RootGrid_OnMouseLeftButtonUp"
+        MouseLeave="RootGrid_OnMouseLeave"
+        LostMouseCapture="RootGrid_OnLostMouseCapture"
+        DragOver="RootGrid_OnDragOver"
+        Drop="RootGrid_OnDrop"
+        MouseLeftButtonDown="RootGrid_OnMouseLeftButtonDown">
+        <Border
+            x:Name="BackdropBorder"
+            Panel.ZIndex="0"
+            Background="{Binding OverlayBackdropBrush}"
+            MouseLeftButtonDown="BackdropBorder_OnMouseLeftButtonDown" />
+
+        <Grid
+            Panel.ZIndex="10"
+            Margin="64,28,64,40"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Visibility="{Binding ListVisibility}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid
+                x:Name="ListHeaderRegion"
+                Grid.Row="0"
+                Panel.ZIndex="30"
+                HorizontalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel
+                    x:Name="HeaderDropBackZone"
+                    Orientation="Vertical"
+                    AllowDrop="True"
+                    DragEnter="HeaderDropBackZone_OnDragEnter"
+                    DragLeave="HeaderDropBackZone_OnDragLeave"
+                    DragOver="HeaderDropBackZone_OnDragOver">
+                    <TextBlock
+                        x:Name="OverlayTitleTextBlock"
+                        Text="{Binding OverlayTitle}"
+                        FontSize="34"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource PrimaryTextBrush}"
+                        MouseLeftButtonDown="OverlayTitleTextBlock_OnMouseLeftButtonDown" />
+                    <TextBox
+                        x:Name="OverlayTitleEditBox"
+                        Width="520"
+                        Margin="0,0,0,0"
+                        Padding="8,4"
+                        FontSize="30"
+                        FontWeight="SemiBold"
+                        Visibility="Collapsed"
+                        Background="#EE181820"
+                        BorderBrush="#FF343442"
+                        Foreground="{StaticResource PrimaryTextBrush}"
+                        CaretBrush="{StaticResource PrimaryTextBrush}"
+                        KeyDown="OverlayTitleEditBox_OnKeyDown"
+                        LostFocus="OverlayTitleEditBox_OnLostFocus" />
+                    <TextBlock
+                        Margin="0,6,0,0"
+                        Text="{Binding CurrentPathDisplay}"
+                        Foreground="{StaticResource SecondaryTextBrush}"
+                        FontSize="13" />
+                    <TextBlock
+                        Margin="0,8,0,0"
+                        Text="{Binding SummaryLineText}"
+                        Foreground="{StaticResource SecondaryTextBrush}"
+                        FontSize="12"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button
+                        Margin="0,0,10,0"
+                        Click="UpFolderButton_OnClick"
+                        Style="{StaticResource HeaderButtonStyle}"
+                        Visibility="{Binding UpFolderVisibility}"
+                        Content="← Назад" />
+                    <Button
+                        Margin="0,0,10,0"
+                        Click="NewButton_OnClick"
+                        Style="{StaticResource HeaderButtonStyle}"
+                        Content="Новая заметка" />
+                    <Button
+                        Margin="0,0,10,0"
+                        Click="NewFolderButton_OnClick"
+                        Style="{StaticResource HeaderButtonStyle}"
+                        Content="Новая папка" />
+                    <Button
+                        Margin="0,0,10,0"
+                        Click="SettingsButton_OnClick"
+                        Style="{StaticResource IconButtonStyle}"
+                        Content="⚙" />
+                    <Button
+                        Click="CloseButton_OnClick"
+                        Style="{StaticResource IconButtonStyle}"
+                        Content="×" />
+                </StackPanel>
+            </Grid>
+
+            <Border
+                Grid.Row="1"
+                Margin="0,18,0,0"
+                Padding="12"
+                Background="#DD181820"
+                BorderBrush="{DynamicResource AccentBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="14"
+                Visibility="{Binding GlobalSearchVisibility}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="72" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="34" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Поиск" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBox
+                        x:Name="GlobalSearchTextBox"
+                        Grid.Column="1"
+                        Margin="12,0"
+                        Padding="10,7"
+                        Text="{Binding GlobalSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                        Background="#FF202028"
+                        BorderBrush="#FF343442"
+                        Foreground="{StaticResource PrimaryTextBrush}"
+                        CaretBrush="{StaticResource PrimaryTextBrush}" />
+                    <Button Grid.Column="2" Width="30" Height="30" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="GlobalSearchCloseButton_OnClick" Style="{StaticResource ActionButtonStyle}">
+                        <Grid Width="11" Height="11">
+                            <Line X1="1" Y1="1" X2="10" Y2="10" Stroke="{StaticResource PrimaryTextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                            <Line X1="10" Y1="1" X2="1" Y2="10" Stroke="{StaticResource PrimaryTextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        </Grid>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <ListBox
+                x:Name="ItemsListBox"
+                Grid.Row="2"
+                Margin="0,26,0,0"
+                Panel.ZIndex="10"
+                VerticalAlignment="Stretch"
+                ItemsSource="{Binding Items}"
+                SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                ItemContainerStyle="{StaticResource OverlayListBoxItemStyle}"
+                Background="Transparent"
+                BorderThickness="0"
+                Padding="0,0,0,40"
+                Focusable="True"
+                HorizontalContentAlignment="Left"
+                VerticalContentAlignment="Top"
+                ScrollViewer.CanContentScroll="False"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                ScrollViewer.VerticalScrollBarVisibility="Visible"
+                Loaded="ItemsListBox_OnLoaded"
+                MouseRightButtonUp="ItemsSurface_OnMouseRightButtonUp"
+                PreviewMouseWheel="ItemsScrollViewer_OnPreviewMouseWheel"
+                AllowDrop="True"
+                DragOver="ItemsListBox_OnDragOver"
+                Drop="ItemsListBox_OnDrop">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel
+                            IsItemsHost="True"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Left"
+                            ItemWidth="322"
+                            ItemHeight="188" />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+            </ListBox>
+        </Grid>
+
+        <Grid
+            Panel.ZIndex="10"
+            Margin="72,40,72,40"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Visibility="{Binding EditorVisibility}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border
+                Padding="20,16"
+                Background="#E60F0F14"
+                BorderBrush="#3330303A"
+                BorderThickness="1"
+                CornerRadius="18">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button
+                        MinWidth="96"
+                        Height="44"
+                        Margin="0,0,16,0"
+                        Click="BackButton_OnClick"
+                        Style="{StaticResource HeaderButtonStyle}"
+                        Content="← Назад" />
+
+                    <StackPanel Grid.Column="1" Orientation="Vertical">
+                        <TextBlock
+                            Text="{Binding EditorTitle}"
+                            FontSize="28"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource PrimaryTextBrush}"
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            Margin="0,6,0,0"
+                            Text="{Binding EditorStateText}"
+                            Foreground="{Binding EditorStateBrush}"
+                            FontSize="13" />
+                    </StackPanel>
+
+                    <Button
+                        Grid.Column="2"
+                        MinWidth="96"
+                        Height="42"
+                        Margin="16,0,10,0"
+                        Click="SaveButton_OnClick"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Content="Сохранить" />
+                    <Button
+                        Grid.Column="3"
+                        MinWidth="90"
+                        Height="42"
+                        Margin="0,0,10,0"
+                        Click="DeleteCurrentButton_OnClick"
+                        Style="{StaticResource DangerButtonStyle}"
+                        Content="Удалить" />
+                    <Button
+                        Grid.Column="4"
+                        Click="CloseButton_OnClick"
+                        Style="{StaticResource IconButtonStyle}"
+                        Content="×" />
+                </Grid>
+            </Border>
+
+            <Border
+                Grid.Row="1"
+                Margin="0,16,0,0"
+                Padding="12"
+                Background="#DD181820"
+                BorderBrush="{DynamicResource AccentBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="14"
+                Visibility="{Binding FileSearchVisibility}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="120" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="96" />
+                        <ColumnDefinition Width="38" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Поиск в файле" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBox
+                        x:Name="FileSearchTextBox"
+                        Grid.Column="1"
+                        Margin="12,0"
+                        Padding="10,7"
+                        Text="{Binding FileSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                        KeyDown="FileSearchTextBox_OnKeyDown"
+                        Background="#FF202028"
+                        BorderBrush="#FF343442"
+                        Foreground="{StaticResource PrimaryTextBrush}"
+                        CaretBrush="{StaticResource PrimaryTextBrush}" />
+                    <TextBlock Grid.Column="2" MinWidth="80" Margin="10,0,6,0" Text="{Binding FileSearchStatus}" Foreground="{StaticResource SecondaryTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" />
+                    <Button Grid.Column="3" Width="30" Height="30" Margin="6,0,0,0" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Center" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Click="FileSearchCloseButton_OnClick" Style="{StaticResource ActionButtonStyle}">
+                        <Grid Width="11" Height="11">
+                            <Line X1="1" Y1="1" X2="10" Y2="10" Stroke="{StaticResource PrimaryTextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                            <Line X1="10" Y1="1" X2="1" Y2="10" Stroke="{StaticResource PrimaryTextBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        </Grid>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <Border
+                Grid.Row="2"
+                Margin="0,16,0,16"
+                Padding="14,10"
+                Background="#990B0B0F"
+                CornerRadius="14"
+                Visibility="{Binding StatusVisibility}">
+                <TextBlock
+                    Text="{Binding StatusMessage}"
+                    Foreground="{StaticResource SecondaryTextBrush}"
+                    TextWrapping="Wrap" />
+            </Border>
+
+            <Grid Grid.Row="3">
+                <TextBox
+                    x:Name="EditorTextBox"
+                    Style="{StaticResource EditorTextBoxStyle}"
+                    Text="{Binding EditorText, UpdateSourceTrigger=PropertyChanged}"
+                    TextChanged="EditorTextBox_OnTextChanged" />
+                <RichTextBox
+                    x:Name="FileSearchHighlightBox"
+                    Padding="18"
+                    Background="#FF181820"
+                    BorderThickness="0"
+                    Foreground="{StaticResource PrimaryTextBrush}"
+                    FontFamily="Consolas"
+                    FontSize="15"
+                    IsReadOnly="True"
+                    IsHitTestVisible="False"
+                    Visibility="Collapsed"
+                    VerticalScrollBarVisibility="Hidden" />
+            </Grid>
+        </Grid>
+
+        <Canvas
+            x:Name="DragPreviewLayer"
+            Panel.ZIndex="50"
+            IsHitTestVisible="False"
+            Visibility="Collapsed">
+            <Border
+                x:Name="DragPreviewCard"
+                Width="250"
+                Padding="14"
+                Background="#E6202028"
+                BorderBrush="{DynamicResource AccentBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="14"
+                Opacity="0.86"
+                RenderTransformOrigin="0.5,0.5">
+                <Border.RenderTransform>
+                    <ScaleTransform ScaleX="0.96" ScaleY="0.96" />
+                </Border.RenderTransform>
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="8" Opacity="0.35" />
+                </Border.Effect>
+                <StackPanel>
+                    <controls:FolderIconControl
+                        x:Name="DragPreviewFolderIcon"
+                        Width="74"
+                        Height="58"
+                        Margin="0,0,0,8"
+                        Visibility="Collapsed" />
+                    <controls:NoteIconControl
+                        x:Name="DragPreviewNoteIcon"
+                        Width="62"
+                        Height="68"
+                        Margin="0,0,0,8"
+                        Visibility="Collapsed" />
+                    <TextBlock
+                        x:Name="DragPreviewTypeText"
+                        Foreground="{StaticResource SecondaryTextBrush}"
+                        FontSize="12"
+                        FontWeight="SemiBold" />
+                    <TextBlock
+                        x:Name="DragPreviewTitleText"
+                        Margin="0,6,0,0"
+                        Foreground="{StaticResource PrimaryTextBrush}"
+                        FontSize="16"
+                        FontWeight="SemiBold"
+                        TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Border>
+        </Canvas>
+
+        <Canvas
+            x:Name="ContextMenuLayer"
+            Panel.ZIndex="80"
+            SnapsToDevicePixels="True"
+            UseLayoutRounding="True"
+            Visibility="Collapsed">
+            <Border
+                x:Name="OverlayContextMenu"
+                MinWidth="300"
+                Padding="8"
+                Background="#FA202028"
+                BorderBrush="#FF343442"
+                BorderThickness="1"
+                CornerRadius="12"
+                SnapsToDevicePixels="True"
+                UseLayoutRounding="True">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="8" Opacity="0.32" />
+                </Border.Effect>
+                <StackPanel x:Name="OverlayContextMenuItems" />
+            </Border>
+        </Canvas>
+
+        <Canvas
+            x:Name="PreviewPopupLayer"
+            Panel.ZIndex="90"
+            Visibility="{Binding PreviewPopupVisibility}">
+            <Border
+                x:Name="PreviewPopup"
+                Width="620"
+                MaxHeight="520"
+                Padding="22"
+                Background="#F0202028"
+                BorderBrush="{DynamicResource AccentBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="16">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="8" Opacity="0.32" />
+                </Border.Effect>
+                <StackPanel>
+                    <Grid Visibility="{Binding FolderPreviewVisibility}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid Width="88" Height="78" HorizontalAlignment="Left" VerticalAlignment="Top" ClipToBounds="False">
+                                <controls:FolderIconControl Width="60" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                            <StackPanel Grid.Column="1" Margin="14,2,0,0">
+                                <TextBlock Text="{Binding PreviewTitle}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Margin="0,6,0,0" Text="{Binding PreviewMeta}" Foreground="{StaticResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Grid.Row="1" Margin="0,16,0,10" Text="Содержимое" Foreground="{StaticResource PrimaryTextBrush}" FontSize="14" FontWeight="SemiBold" />
+                        <ItemsControl Grid.Row="2" MaxHeight="180" ItemsSource="{Binding PreviewTiles}" ItemTemplate="{StaticResource PreviewTileTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </Grid>
+
+                    <StackPanel Visibility="{Binding NotePreviewVisibility}">
+                        <TextBlock Text="{Binding PreviewTitle}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,6,0,0" Text="{Binding PreviewMeta}" Foreground="{StaticResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" />
+                        <ScrollViewer Margin="0,12,0,0" MaxHeight="330" VerticalScrollBarVisibility="Auto">
+                        <TextBlock Text="{Binding PreviewBody}" Foreground="{StaticResource SecondaryTextBrush}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
+                        </ScrollViewer>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Canvas>
+
+        <Canvas
+            x:Name="ToastLayer"
+            Panel.ZIndex="120"
+            IsHitTestVisible="False"
+            Visibility="{Binding StatusVisibility}">
+            <Border
+                x:Name="OverlayToast"
+                Padding="16,10"
+                Background="#F0202028"
+                BorderBrush="#FF343442"
+                BorderThickness="1"
+                CornerRadius="14">
+                <TextBlock
+                    Text="{Binding StatusMessage}"
+                    Foreground="{StaticResource SecondaryTextBrush}"
+                    FontSize="13"
+                    TextWrapping="Wrap" />
+            </Border>
+        </Canvas>
+
+        <Border
+            Panel.ZIndex="130"
+            Width="520"
+            MaxHeight="360"
+            Margin="0,0,22,22"
+            Padding="14"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Background="#E0181820"
+            BorderBrush="{DynamicResource AccentBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="16"
+            Visibility="{Binding DragDebugVisibility}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock
+                    Text="Drag debug"
+                    Foreground="{StaticResource PrimaryTextBrush}"
+                    FontSize="15"
+                    FontWeight="SemiBold" />
+                <TextBlock
+                    Grid.Row="1"
+                    Margin="0,6,0,10"
+                    Text="{Binding DragDebugStatus}"
+                    Foreground="{StaticResource SecondaryTextBrush}"
+                    FontSize="12"
+                    TextWrapping="Wrap" />
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding DragDebugEvents}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock
+                                    Margin="0,0,0,4"
+                                    Text="{Binding}"
+                                    Foreground="{StaticResource SecondaryTextBrush}"
+                                    FontFamily="Consolas"
+                                    FontSize="11"
+                                    TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <Grid
+            x:Name="PromptOverlay"
+            Panel.ZIndex="100"
+            Background="#66000000"
+            Visibility="Collapsed">
+            <Border
+                Width="560"
+                Padding="24"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="#FF181820"
+                BorderBrush="#FF343442"
+                BorderThickness="1"
+                CornerRadius="16">
+                <StackPanel>
+                    <TextBlock
+                        x:Name="PromptTitleText"
+                        Foreground="{StaticResource PrimaryTextBrush}"
+                        FontSize="22"
+                        FontWeight="SemiBold" />
+                    <TextBlock
+                        x:Name="PromptHintText"
+                        Margin="0,8,0,12"
+                        Foreground="{StaticResource SecondaryTextBrush}"
+                        FontSize="13"
+                        TextWrapping="Wrap" />
+                    <TextBox
+                        x:Name="PromptTextBox"
+                        Width="500"
+                        Padding="12,9"
+                        Background="#FF202028"
+                        BorderBrush="#FF343442"
+                        Foreground="{StaticResource PrimaryTextBrush}"
+                        CaretBrush="{StaticResource PrimaryTextBrush}"
+                        KeyDown="PromptTextBox_OnKeyDown" />
+                    <StackPanel x:Name="PromptButtonsPanel" Margin="0,18,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+                        <Button
+                            Width="110"
+                            Margin="0,0,10,0"
+                            Click="PromptCancelButton_OnClick"
+                            Style="{StaticResource ActionButtonStyle}"
+                            Content="Отмена" />
+                        <Button
+                            x:Name="PromptConfirmButton"
+                            Width="120"
+                            Click="PromptConfirmButton_OnClick"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Content="Создать" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Grid
+            x:Name="SettingsOverlay"
+            Panel.ZIndex="100"
+            Background="#77000000"
+            Visibility="Collapsed">
+            <Border
+                Width="760"
+                Height="720"
+                Padding="26"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="#F0181820"
+                BorderBrush="#FF343442"
+                BorderThickness="1"
+                CornerRadius="22">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            Text="Настройки"
+                            Foreground="{StaticResource PrimaryTextBrush}"
+                            FontSize="28"
+                            FontWeight="SemiBold" />
+                        <Button
+                            Grid.Column="1"
+                            Margin="0,0,10,0"
+                            Click="SettingsMainTabButton_OnClick"
+                            Style="{StaticResource ActionButtonStyle}"
+                            Content="Основные" />
+                        <Button
+                            Grid.Column="2"
+                            Click="SettingsTrashTabButton_OnClick"
+                            Style="{StaticResource ActionButtonStyle}"
+                            Content="Мусорка" />
+                    </Grid>
+
+                    <ScrollViewer
+                        x:Name="SettingsMainPanel"
+                        Grid.Row="1"
+                        Margin="0,24,0,20"
+                        VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Text="Название overlay" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                            <TextBox x:Name="SettingsTitleTextBox" Margin="0,8,0,16" Padding="12,9" TextChanged="SettingsTitleTextBox_OnTextChanged" Background="#FF202028" BorderBrush="#FF343442" Foreground="{StaticResource PrimaryTextBrush}" CaretBrush="{StaticResource PrimaryTextBrush}" />
+
+                            <TextBlock Text="Папка заметок" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                            <TextBox x:Name="SettingsNotesDirectoryTextBox" Margin="0,8,0,16" Padding="12,9" Background="#FF202028" BorderBrush="#FF343442" Foreground="{StaticResource PrimaryTextBrush}" CaretBrush="{StaticResource PrimaryTextBrush}" />
+
+                            <TextBlock Text="Горячая клавиша overlay" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                            <TextBox x:Name="SettingsToggleHotkeyTextBox" Margin="0,8,0,16" Padding="12,9" Background="#FF202028" BorderBrush="#FF343442" Foreground="{StaticResource PrimaryTextBrush}" CaretBrush="{StaticResource PrimaryTextBrush}" />
+
+                            <TextBlock Text="Горячая клавиша новой заметки" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                            <TextBox x:Name="SettingsNewNoteHotkeyTextBox" Margin="0,8,0,16" Padding="12,9" Background="#FF202028" BorderBrush="#FF343442" Foreground="{StaticResource PrimaryTextBrush}" CaretBrush="{StaticResource PrimaryTextBrush}" />
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Затемнение фона" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                                <TextBlock Grid.Column="1" Text="{Binding ElementName=SettingsDimSlider, Path=Value, StringFormat={}{0:P0}}" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                            </Grid>
+                            <Slider x:Name="SettingsDimSlider" Margin="0,10,0,20" Minimum="0" Maximum="1" TickFrequency="0.01" PreviewMouseLeftButtonDown="SettingsDimSlider_OnPreviewMouseLeftButtonDown" ValueChanged="SettingsDimSlider_OnValueChanged" />
+
+                            <TextBlock Text="Акцентный цвет" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                            <StackPanel Margin="0,8,0,8" Orientation="Horizontal">
+                                <TextBox x:Name="SettingsAccentColorTextBox" Width="250" Padding="12,9" TextChanged="SettingsAccentColorTextBox_OnTextChanged" Background="#FF202028" BorderBrush="#FF343442" Foreground="{StaticResource PrimaryTextBrush}" CaretBrush="{StaticResource PrimaryTextBrush}" />
+                                <Button x:Name="SettingsAccentPreviewButton" Width="44" Height="38" Margin="10,0,0,0" Style="{StaticResource ActionButtonStyle}" Content="●" />
+                                <Button x:Name="SettingsAccentPickerButton" Width="92" Height="38" Margin="10,0,0,0" Click="SettingsAccentPickerButton_OnClick" Style="{StaticResource ActionButtonStyle}" Content="Палитра" />
+                                <TextBlock x:Name="SettingsAccentErrorText" Margin="12,8,0,0" Foreground="{StaticResource WarningTextBrush}" FontSize="12" />
+                            </StackPanel>
+                            <WrapPanel x:Name="AccentPresetPanel" Margin="0,0,0,18" />
+
+                            <CheckBox
+                                x:Name="UseAccentForSelectionCheckBox"
+                                Margin="0,0,0,16"
+                                Checked="UseAccentForSelectionCheckBox_OnChanged"
+                                Unchecked="UseAccentForSelectionCheckBox_OnChanged"
+                                Foreground="{StaticResource SecondaryTextBrush}"
+                                Content="Использовать accent color для рамки выделения" />
+
+                            <TextBlock Text="Цвет рамки выделения" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                            <StackPanel Margin="0,8,0,8" Orientation="Horizontal">
+                                <TextBox x:Name="SettingsSelectionColorTextBox" Width="250" Padding="12,9" TextChanged="SettingsSelectionColorTextBox_OnTextChanged" Background="#FF202028" BorderBrush="#FF343442" Foreground="{StaticResource PrimaryTextBrush}" CaretBrush="{StaticResource PrimaryTextBrush}" />
+                                <Button x:Name="SettingsColorPreviewButton" Width="44" Height="38" Margin="10,0,0,0" Click="SettingsColorPreviewButton_OnClick" Style="{StaticResource ActionButtonStyle}" Content="●" />
+                                <TextBlock x:Name="SettingsColorErrorText" Margin="12,8,0,0" Foreground="{StaticResource WarningTextBrush}" FontSize="12" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Grid
+                        x:Name="SettingsTrashPanel"
+                        Grid.Row="1"
+                        Margin="0,24,0,20"
+                        Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Button
+                            HorizontalAlignment="Right"
+                            Click="SettingsEmptyTrashButton_OnClick"
+                            Style="{StaticResource DangerButtonStyle}"
+                            Content="Очистить мусорку" />
+                        <ScrollViewer Grid.Row="1" Margin="0,14,0,0" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="SettingsTrashItemsControl">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:TrashItem}">
+                                        <Border Margin="0,0,0,10" Padding="12" Background="#FF202028" BorderBrush="#FF343442" BorderThickness="1" CornerRadius="10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding DisplayName}" Foreground="{StaticResource PrimaryTextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Margin="0,4,0,0" Text="{Binding OriginalPath}" Foreground="{StaticResource SecondaryTextBrush}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Margin="0,4,0,0" Text="{Binding DisplayDeletedAt}" Foreground="{StaticResource SecondaryTextBrush}" FontSize="12" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                    <Button Tag="{Binding}" Margin="0,0,8,0" Click="SettingsRestoreTrashButton_OnClick" Style="{StaticResource ActionButtonStyle}" Content="Восстановить" />
+                                                    <Button Tag="{Binding}" Click="SettingsDeleteTrashButton_OnClick" Style="{StaticResource DangerButtonStyle}" Content="Удалить навсегда" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <TextBlock
+                        x:Name="SettingsStatusText"
+                        Grid.Row="2"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource WarningTextBrush}"
+                        FontSize="13" />
+
+                    <StackPanel Grid.Row="2" HorizontalAlignment="Right" Orientation="Horizontal">
+                        <Button Width="110" Margin="0,0,10,0" Click="SettingsCancelButton_OnClick" Style="{StaticResource ActionButtonStyle}" Content="Отмена" />
+                        <Button Width="120" Click="SettingsSaveButton_OnClick" Style="{StaticResource AccentButtonStyle}" Content="Сохранить" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid
+            x:Name="ColorPickerOverlay"
+            Panel.ZIndex="110"
+            Background="#66000000"
+            Visibility="Collapsed">
+            <Border
+                Width="500"
+                Padding="22"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="#FF181820"
+                BorderBrush="#FF343442"
+                BorderThickness="1"
+                CornerRadius="16">
+                <StackPanel>
+                    <TextBlock x:Name="ColorPickerTitleText" Text="Цвет рамки" Foreground="{StaticResource PrimaryTextBrush}" FontSize="22" FontWeight="SemiBold" />
+                    <TextBlock Text="Цветовой круг" Margin="0,14,0,8" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                    <Grid HorizontalAlignment="Center" Width="232" Height="232">
+                        <Image
+                            x:Name="ColorWheelImage"
+                            Width="220"
+                            Height="220"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            MouseLeftButtonDown="ColorWheel_OnMouseLeftButtonDown"
+                            MouseMove="ColorWheel_OnMouseMove"
+                            MouseLeftButtonUp="ColorWheel_OnMouseLeftButtonUp"
+                            Stretch="None" />
+                        <Ellipse
+                            x:Name="ColorWheelMarker"
+                            Width="14"
+                            Height="14"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Stroke="{StaticResource PrimaryTextBrush}"
+                            StrokeThickness="2"
+                            Fill="Transparent"
+                            IsHitTestVisible="False">
+                            <Ellipse.Effect>
+                                <DropShadowEffect BlurRadius="6" ShadowDepth="0" Opacity="0.55" />
+                            </Ellipse.Effect>
+                        </Ellipse>
+                    </Grid>
+                    <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Margin="0,8,0,4">
+                        <TextBlock Text="Preview" Foreground="{StaticResource SecondaryTextBrush}" FontSize="12" VerticalAlignment="Center" />
+                        <Border
+                            x:Name="ColorPickerPreview"
+                            Width="34"
+                            Height="34"
+                            Margin="10,0,0,0"
+                            BorderBrush="#44FFFFFF"
+                            BorderThickness="1"
+                            CornerRadius="17" />
+                    </StackPanel>
+                    <TextBlock Text="Быстрые цвета" Margin="0,10,0,8" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                    <WrapPanel x:Name="ColorWheelPalettePanel" Margin="0,0,0,10" />
+                    <WrapPanel x:Name="ColorPresetPanel" Margin="0,18,0,16" />
+                    <TextBlock Text="Hex" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                    <TextBox x:Name="ColorPickerHexTextBox" Margin="0,8,0,8" Padding="12,9" TextChanged="ColorPickerHexTextBox_OnTextChanged" Background="#FF202028" BorderBrush="#FF343442" Foreground="{StaticResource PrimaryTextBrush}" CaretBrush="{StaticResource PrimaryTextBrush}" />
+                    <Grid Margin="0,10,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="28" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="44" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="R" Foreground="{StaticResource SecondaryTextBrush}" VerticalAlignment="Center" />
+                        <Slider x:Name="ColorPickerRSlider" Grid.Column="1" Minimum="0" Maximum="255" ValueChanged="ColorPickerRgbSlider_OnValueChanged" />
+                        <TextBlock Grid.Column="2" Text="{Binding ElementName=ColorPickerRSlider, Path=Value, StringFormat={}{0:0}}" Foreground="{StaticResource SecondaryTextBrush}" HorizontalAlignment="Right" />
+                        <TextBlock Grid.Row="1" Text="G" Foreground="{StaticResource SecondaryTextBrush}" VerticalAlignment="Center" />
+                        <Slider x:Name="ColorPickerGSlider" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="255" ValueChanged="ColorPickerRgbSlider_OnValueChanged" />
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding ElementName=ColorPickerGSlider, Path=Value, StringFormat={}{0:0}}" Foreground="{StaticResource SecondaryTextBrush}" HorizontalAlignment="Right" />
+                        <TextBlock Grid.Row="2" Text="B" Foreground="{StaticResource SecondaryTextBrush}" VerticalAlignment="Center" />
+                        <Slider x:Name="ColorPickerBSlider" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="255" ValueChanged="ColorPickerRgbSlider_OnValueChanged" />
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding ElementName=ColorPickerBSlider, Path=Value, StringFormat={}{0:0}}" Foreground="{StaticResource SecondaryTextBrush}" HorizontalAlignment="Right" />
+                    </Grid>
+                    <TextBlock x:Name="ColorPickerErrorText" Foreground="{StaticResource WarningTextBrush}" FontSize="12" />
+                    <StackPanel x:Name="ColorPickerButtonsPanel" Margin="0,18,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+                        <Button Width="110" Margin="0,0,10,0" Click="ColorPickerCancelButton_OnClick" Style="{StaticResource ActionButtonStyle}" Content="Закрыть" />
+                        <Button Width="120" Click="ColorPickerApplyButton_OnClick" Style="{StaticResource AccentButtonStyle}" Content="Выбрать" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Grid
+            x:Name="FolderPickerOverlay"
+            Panel.ZIndex="110"
+            Background="#66000000"
+            Visibility="Collapsed"
+            PreviewMouseWheel="FolderPickerOverlay_OnPreviewMouseWheel">
+            <Border
+                Width="620"
+                Padding="24"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="#FF181820"
+                BorderBrush="{Binding SelectionOutlineBrush}"
+                BorderThickness="1"
+                CornerRadius="18">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Переместить в папку" Foreground="{StaticResource PrimaryTextBrush}" FontSize="22" FontWeight="SemiBold" />
+                    <TextBlock Grid.Row="1" Margin="0,8,0,18" Text="Выберите папку назначения" Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" />
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="40" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="40" />
+                        </Grid.ColumnDefinitions>
+                        <Button
+                            x:Name="FolderPickerPrevButton"
+                            Width="34"
+                            Height="84"
+                            Click="FolderPickerPrevButton_OnClick"
+                            Style="{StaticResource ActionButtonStyle}"
+                            Content="‹" />
+                        <ItemsControl
+                            Grid.Column="1"
+                            HorizontalAlignment="Center"
+                            ItemsSource="{Binding VisibleFolderChoices}"
+                            ItemTemplate="{StaticResource FolderChoiceTileTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                        <Button
+                            x:Name="FolderPickerNextButton"
+                            Grid.Column="2"
+                            Width="34"
+                            Height="84"
+                            Click="FolderPickerNextButton_OnClick"
+                            Style="{StaticResource ActionButtonStyle}"
+                            Content="›" />
+                    </Grid>
+                    <StackPanel Grid.Row="3" Margin="0,20,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+                        <Button Width="110" Margin="0,0,10,0" Click="FolderPickerCancelButton_OnClick" Style="{StaticResource ActionButtonStyle}" Content="Отмена" />
+                        <Button x:Name="FolderPickerConfirmButton" Width="128" Click="FolderPickerConfirmButton_OnClick" Style="{StaticResource AccentButtonStyle}" Content="Переместить" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid
+            x:Name="ModalOverlay"
+            Panel.ZIndex="100"
+            Background="#66000000"
+            Visibility="Collapsed">
+            <Border
+                Width="440"
+                Padding="24"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="#FF181820"
+                BorderBrush="#FF343442"
+                BorderThickness="1"
+                CornerRadius="16">
+                <StackPanel>
+                    <TextBlock
+                        x:Name="ModalTitleText"
+                        Foreground="{StaticResource PrimaryTextBrush}"
+                        FontSize="22"
+                        FontWeight="SemiBold"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        x:Name="ModalMessageText"
+                        Margin="0,12,0,22"
+                        Foreground="{StaticResource SecondaryTextBrush}"
+                        FontSize="14"
+                        TextWrapping="Wrap" />
+                    <StackPanel
+                        x:Name="ModalButtonsPanel"
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
