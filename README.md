@@ -29,17 +29,12 @@ Windows overlay-приложение для заметок в стиле Task Vi
 - Для сборки из исходников нужен `.NET SDK 8`.
 
 ## Download
-
-Обычному пользователю не нужно скачивать исходный код. Скачайте файл из GitHub Releases:
-
 - `NotesTaskView-Setup.exe` - recommended installer.
 - `NotesTaskView-v1.0.0-win-x64-self-contained.zip` - portable self-contained build.
 
 Self-contained версия не требует установленного .NET Runtime.
 
 ## Installation
-
-Для обычного использования рекомендуется self-contained release или installer script.
 
 Через installer:
 
