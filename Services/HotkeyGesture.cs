@@ -12,7 +12,7 @@ public sealed record HotkeyGesture(string DisplayName, uint Modifiers, Key Key)
 
         if (string.IsNullOrWhiteSpace(value))
         {
-            error = "Горячая клавиша не задана.";
+            error = "Shortcut is empty.";
             return false;
         }
 
@@ -22,7 +22,7 @@ public sealed record HotkeyGesture(string DisplayName, uint Modifiers, Key Key)
 
         if (parts.Count < 2)
         {
-            error = "Используйте формат вроде Win+Shift+Tab или Ctrl+Alt+N.";
+            error = "Use a format like Ctrl+Shift+Space or Ctrl+Alt+N.";
             return false;
         }
 
@@ -55,7 +55,7 @@ public sealed record HotkeyGesture(string DisplayName, uint Modifiers, Key Key)
                 default:
                     if (!Enum.TryParse(part, true, out key) || key == Key.None)
                     {
-                        error = $"Не удалось распознать клавишу: {part}.";
+                        error = $"Could not parse key: {part}.";
                         return false;
                     }
 
@@ -66,7 +66,7 @@ public sealed record HotkeyGesture(string DisplayName, uint Modifiers, Key Key)
 
         if (modifiers == 0 || key == Key.None)
         {
-            error = "Горячая клавиша должна содержать модификатор и основную клавишу.";
+            error = "Shortcut must contain a modifier and a main key.";
             return false;
         }
 

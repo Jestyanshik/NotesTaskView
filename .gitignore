@@ -4,6 +4,7 @@ obj/
 build-check/
 publish/
 release/
+installer-output/
 .vs/
 
 # User and IDE files
@@ -34,6 +35,7 @@ Notes/
 *.rar
 *.bak
 *.testbak
+git
 
 # Design references kept outside release sources
 * reference.png

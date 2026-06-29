@@ -14,7 +14,6 @@ public sealed class HotkeyManager : IDisposable
 
     public HotkeyManager()
     {
-        // A tiny hidden native window is enough to receive WM_HOTKEY globally.
         var parameters = new HwndSourceParameters("NotesTaskViewHotkeys")
         {
             Width = 0,
@@ -35,17 +34,16 @@ public sealed class HotkeyManager : IDisposable
         var errors = new List<string>();
         UnregisterAll();
 
-        if (!TryRegister(ToggleWindowHotkeyId, settings.ToggleOverlayHotkey, "горячую клавишу overlay", errors))
-        {
-            NativeMethods.UnregisterHotKey(_source.Handle, ToggleWindowHotkeyId);
-        }
-
-        if (!TryRegister(CreateNoteHotkeyId, settings.NewNoteHotkey, "горячую клавишу новой заметки", errors))
-        {
-            NativeMethods.UnregisterHotKey(_source.Handle, CreateNoteHotkeyId);
-        }
+        TryRegister(ToggleWindowHotkeyId, settings.ToggleOverlayHotkey, "overlay", errors);
+        TryRegister(CreateNoteHotkeyId, settings.NewNoteHotkey, "new-note", errors);
 
         return errors;
+    }
+
+    public void UnregisterAll()
+    {
+        NativeMethods.UnregisterHotKey(_source.Handle, ToggleWindowHotkeyId);
+        NativeMethods.UnregisterHotKey(_source.Handle, CreateNoteHotkeyId);
     }
 
     public void Dispose()
@@ -61,43 +59,31 @@ public sealed class HotkeyManager : IDisposable
         _disposed = true;
     }
 
-    private bool TryRegister(int id, string hotkeyText, string description, List<string> errors)
+    private bool TryRegister(int id, string hotkeyText, string field, List<string> errors)
     {
         if (!HotkeyGesture.TryParse(hotkeyText, out var gesture, out var parseError))
         {
-            errors.Add($"Не удалось зарегистрировать {description} \"{hotkeyText}\": {parseError}");
+            errors.Add($"{field}|parse|{parseError}");
             return false;
         }
 
-        if (RegisterHotkey(id, gesture.Modifiers, gesture.Key))
+        if (NativeMethods.RegisterHotKey(
+            _source.Handle,
+            id,
+            gesture.Modifiers,
+            (uint)KeyInterop.VirtualKeyFromKey(gesture.Key)))
         {
             return true;
         }
 
-        errors.Add($"Не удалось зарегистрировать {description} {gesture.DisplayName}. Возможно, она уже занята.");
+        errors.Add($"{field}|busy|{gesture.DisplayName}");
         return false;
-    }
-
-    private void UnregisterAll()
-    {
-        NativeMethods.UnregisterHotKey(_source.Handle, ToggleWindowHotkeyId);
-        NativeMethods.UnregisterHotKey(_source.Handle, CreateNoteHotkeyId);
-    }
-
-    private bool RegisterHotkey(int id, uint modifiers, Key key)
-    {
-        return NativeMethods.RegisterHotKey(
-            _source.Handle,
-            id,
-            modifiers,
-            (uint)KeyInterop.VirtualKeyFromKey(key));
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == NativeMethods.WM_HOTKEY)
         {
-            // The hotkey id lets the app route each shortcut to the right action.
             HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs
             {
                 HotkeyId = wParam.ToInt32()

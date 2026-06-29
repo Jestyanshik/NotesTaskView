@@ -26,6 +26,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly NoteService _noteService;
     private readonly UserSettingsService _userSettingsService;
     private readonly Func<UserSettings, List<string>> _applySettings;
+    private readonly Func<UserSettings, List<string>> _validateHotkeys;
     private readonly DispatcherTimer _refreshDebounceTimer;
     private readonly DispatcherTimer _dragBackTimer;
     private readonly DispatcherTimer _dragAutoScrollTimer;
@@ -108,17 +109,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private int _fileSearchMatchIndex = -1;
     private int _folderChoiceStartIndex;
     private FolderChoiceItem? _selectedFolderChoice;
+    private TextBlock? _onboardingIntroText;
+    private ComboBox? _settingsLanguageComboBox;
+    private TextBlock? _settingsToggleHotkeyErrorText;
+    private TextBlock? _settingsNewNoteHotkeyErrorText;
+    private Button? _settingsCheckHotkeysButton;
+    private Button? _settingsCloseAppButton;
+    private bool _isOnboardingMode;
 
     public MainWindow(
         NoteService noteService,
         UserSettingsService userSettingsService,
         UserSettings settings,
-        Func<UserSettings, List<string>> applySettings)
+        Func<UserSettings, List<string>> applySettings,
+        Func<UserSettings, List<string>> validateHotkeys)
     {
         _noteService = noteService;
         _userSettingsService = userSettingsService;
         _settings = settings;
         _applySettings = applySettings;
+        _validateHotkeys = validateHotkeys;
         _currentFolderPath = _noteService.ResolveFolderOrRoot(settings.NotesDirectory);
         _overlayTitle = settings.OverlayTitle;
         _noteService.NotesChanged += NoteService_OnNotesChanged;
@@ -157,6 +167,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         InitializeComponent();
         DataContext = this;
+        BuildSettingsOnboardingControls();
         SettingsTrashItemsControl.ItemsSource = _trashItems;
         BuildColorPresets();
         BuildAccentPresets();
@@ -569,6 +580,107 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await ShowErrorAsync(title, message);
     }
 
+    public async Task ShowOnboardingAsync()
+    {
+        await ShowOverlayForSettingsAsync();
+        OpenSettingsPanel(onboarding: true);
+    }
+
+    public async Task ShowSettingsWithHotkeyErrorsAsync(IReadOnlyList<string> errors)
+    {
+        await ShowOverlayForSettingsAsync();
+        OpenSettingsPanel(onboarding: false);
+        ApplyHotkeyErrors(errors);
+    }
+
+    public async Task ShowFromTrayAsync()
+    {
+        await ShowOverlayAsync();
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+
+        Activate();
+        Focus();
+    }
+
+    public async Task ShowSettingsFromTrayAsync()
+    {
+        await ShowOverlayForSettingsAsync();
+        OpenSettingsPanel();
+    }
+
+    public async Task OpenNotesFolderFromTrayAsync()
+    {
+        if (!Directory.Exists(_settings.NotesDirectory))
+        {
+            await ShowOverlayAsync();
+            return;
+        }
+
+        await OpenFolderFromTrayAsync(_settings.NotesDirectory, "NotesFolder", "FolderMissingTitle");
+    }
+
+    public async Task OpenConfigFolderFromTrayAsync()
+    {
+        var settingsDirectory = _userSettingsService.GetSettingsDirectoryPath();
+        if (!Directory.Exists(settingsDirectory))
+        {
+            await ShowOverlayErrorAsync(
+                UiText.T(_settings.Language, "ConfigFolder"),
+                UiText.T(_settings.Language, "ConfigFolderMissingTitle"));
+            return;
+        }
+
+        await OpenFolderFromTrayAsync(settingsDirectory, "ConfigFolder", "ConfigFolderMissingTitle");
+    }
+
+    public async Task CloseApplicationFromTrayAsync()
+    {
+        await RequestCloseApplicationAsync();
+    }
+
+    private async Task OpenFolderFromTrayAsync(string folderPath, string titleKey, string missingKey)
+    {
+        try
+        {
+            if (!Directory.Exists(folderPath))
+            {
+                await ShowOverlayErrorAsync(UiText.T(_settings.Language, titleKey), UiText.T(_settings.Language, missingKey));
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"\"{folderPath}\"",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            await ShowOverlayErrorAsync(
+                UiText.T(_settings.Language, "FailedToOpenFolder"),
+                ex.Message);
+        }
+    }
+
+    private async Task ShowOverlayForSettingsAsync()
+    {
+        WindowState = WindowState.Maximized;
+        ShowInTaskbar = false;
+
+        if (!IsVisible)
+        {
+            Show();
+        }
+
+        Activate();
+        Focus();
+        await Task.CompletedTask;
+    }
+
     private async Task<bool> ShowOverlayAsync()
     {
         WindowState = WindowState.Maximized;
@@ -611,11 +723,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         while (!Directory.Exists(_settings.NotesDirectory))
         {
             var choice = await ShowChoiceAsync(
-                "Выберите папку для заметок",
-                "Текущая папка заметок не найдена. Заметки не удалены: выберите старую папку или создайте новую.",
-                ("default", "Создать папку по умолчанию\nDocuments\\NotesTaskView", false),
-                ("choose", "Выбрать существующую папку\nВведите путь к папке вручную", false),
-                ("search", "Найти автоматически\nБезопасный поиск только в пользовательских папках", false));
+                UiText.T(_settings.Language, "FolderMissingTitle"),
+                UiText.T(_settings.Language, "FolderMissingMessage"),
+                ("choose", $"{UiText.T(_settings.Language, "ChooseFolder")}{Environment.NewLine}{UiText.T(_settings.Language, "EnterFolderPath")}", false),
+                ("search", $"{UiText.T(_settings.Language, "FindAutomatically")}{Environment.NewLine}{UiText.T(_settings.Language, "SearchProgress")}", false),
+                ("default", $"{UiText.T(_settings.Language, "CreateDefaultFolder")}{Environment.NewLine}Documents\\NotesTaskView", false),
+                ("settings", UiText.T(_settings.Language, "OpenSettings"), false),
+                ("close-app", UiText.T(_settings.Language, "CloseApp"), true));
 
             switch (choice)
             {
@@ -642,6 +756,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         return true;
                     }
                     break;
+
+                case "settings":
+                    OpenSettingsPanel(onboarding: true);
+                    return false;
+
+                case "close-app":
+                    await RequestCloseApplicationAsync();
+                    return false;
 
                 default:
                     Hide();
@@ -672,9 +794,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async Task<bool> TryChooseExistingNotesFolderAsync()
     {
         var selectedPath = await ShowPromptAsync(
-            "Выбрать существующую папку",
-            "Введите полный путь к папке с заметками.",
-            "Сохранить",
+            UiText.T(_settings.Language, "ChooseFolder"),
+            UiText.T(_settings.Language, "EnterFolderPath"),
+            UiText.T(_settings.Language, "Save"),
             _settings.NotesDirectory);
 
         if (string.IsNullOrWhiteSpace(selectedPath))
@@ -685,7 +807,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var expandedPath = Environment.ExpandEnvironmentVariables(selectedPath.Trim());
         if (!Directory.Exists(expandedPath))
         {
-            await ShowErrorAsync("Папка заметок", "Такая папка не найдена.");
+            await ShowErrorAsync(UiText.T(_settings.Language, "NotesFolder"), UiText.T(_settings.Language, "FolderNotFound"));
             return false;
         }
 
@@ -695,13 +817,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task<bool> TryFindExistingNotesFolderAsync()
     {
-        ShowStatus("Ищем папки с заметками...", true);
+        ShowStatus(UiText.T(_settings.Language, "SearchProgress"), true);
         var candidates = await FindNotesFolderCandidatesAsync(CancellationToken.None);
         ShowStatus(string.Empty, false);
 
         if (candidates.Count == 0)
         {
-            await ShowErrorAsync("Автопоиск", "Подходящие папки с заметками не найдены в пользовательских папках.");
+            await ShowErrorAsync(UiText.T(_settings.Language, "FindAutomatically"), UiText.T(_settings.Language, "SearchEmpty"));
             return false;
         }
 
@@ -715,8 +837,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             .ToArray();
 
         var result = await ShowChoiceAsync(
-            "Найдены папки с заметками",
-            "Выберите папку, которую нужно использовать.",
+            UiText.T(_settings.Language, "SearchTitle"),
+            UiText.T(_settings.Language, "SearchMessage"),
             choices);
 
         if (!int.TryParse(result, out var selectedIndex) || selectedIndex < 0 || selectedIndex >= candidates.Count)
@@ -4176,23 +4298,365 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         CompleteFolderPicker(_selectedFolderChoice?.Folder);
     }
 
-    private void OpenSettingsPanel()
+    private void BuildSettingsOnboardingControls()
     {
+        if (SettingsMainPanel.Content is not StackPanel panel)
+        {
+            return;
+        }
+
+        _onboardingIntroText = new TextBlock
+        {
+            Margin = new Thickness(0, 0, 0, 16),
+            Foreground = GetBrush("SecondaryTextBrush"),
+            FontSize = 14,
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed
+        };
+
+        _settingsLanguageComboBox = new ComboBox
+        {
+            Margin = new Thickness(0, 8, 0, 16),
+            Padding = new Thickness(10, 7, 10, 7),
+            Background = new SolidColorBrush(Color.FromRgb(32, 32, 40)),
+            Foreground = GetBrush("PrimaryTextBrush")
+        };
+        _settingsLanguageComboBox.Items.Add(new ComboBoxItem { Content = "Русский", Tag = UiText.Ru });
+        _settingsLanguageComboBox.Items.Add(new ComboBoxItem { Content = "English", Tag = UiText.En });
+        _settingsLanguageComboBox.SelectionChanged += SettingsLanguageComboBox_OnSelectionChanged;
+
+        var folderButtons = new WrapPanel { Margin = new Thickness(0, 0, 0, 16) };
+        folderButtons.Children.Add(CreateSettingsActionButton(UiText.T(_settings.Language, "ChooseFolder"), SettingsChooseFolderButton_OnClick, 150));
+        folderButtons.Children.Add(CreateSettingsActionButton(UiText.T(_settings.Language, "CreateDefaultFolder"), SettingsCreateDefaultFolderButton_OnClick, 220));
+        folderButtons.Children.Add(CreateSettingsActionButton(UiText.T(_settings.Language, "FindAutomatically"), SettingsFindFolderButton_OnClick, 180));
+
+        _settingsToggleHotkeyErrorText = CreateSettingsErrorText();
+        _settingsNewNoteHotkeyErrorText = CreateSettingsErrorText();
+        _settingsCheckHotkeysButton = CreateSettingsActionButton(UiText.T(_settings.Language, "CheckHotkeys"), SettingsCheckHotkeysButton_OnClick, 210);
+        _settingsCheckHotkeysButton.Margin = new Thickness(0, 0, 0, 18);
+        _settingsCloseAppButton = CreateSettingsActionButton(UiText.T(_settings.Language, "CloseApp"), CloseAppButton_OnClick, 180);
+        _settingsCloseAppButton.Margin = new Thickness(0, 0, 0, 18);
+        _settingsCloseAppButton.Style = (Style)Application.Current.Resources["DangerButtonStyle"];
+
+        panel.Children.Insert(0, _onboardingIntroText);
+        panel.Children.Insert(1, CreateSettingsLabel(() => UiText.T(_settings.Language, "Language")));
+        panel.Children.Insert(2, _settingsLanguageComboBox);
+        panel.Children.Insert(3, _settingsCloseAppButton);
+
+        var notesDirectoryIndex = panel.Children.IndexOf(SettingsNotesDirectoryTextBox);
+        if (notesDirectoryIndex >= 0)
+        {
+            panel.Children.Insert(notesDirectoryIndex + 1, folderButtons);
+        }
+
+        var toggleHotkeyIndex = panel.Children.IndexOf(SettingsToggleHotkeyTextBox);
+        if (toggleHotkeyIndex >= 0)
+        {
+            panel.Children.Insert(toggleHotkeyIndex + 1, _settingsToggleHotkeyErrorText);
+        }
+
+        var newNoteHotkeyIndex = panel.Children.IndexOf(SettingsNewNoteHotkeyTextBox);
+        if (newNoteHotkeyIndex >= 0)
+        {
+            panel.Children.Insert(newNoteHotkeyIndex + 1, _settingsNewNoteHotkeyErrorText);
+            panel.Children.Insert(newNoteHotkeyIndex + 2, _settingsCheckHotkeysButton);
+        }
+    }
+
+    private TextBlock CreateSettingsLabel(Func<string> textFactory)
+    {
+        return new TextBlock
+        {
+            Text = textFactory(),
+            Foreground = GetBrush("SecondaryTextBrush"),
+            FontSize = 13
+        };
+    }
+
+    private TextBlock CreateSettingsErrorText()
+    {
+        return new TextBlock
+        {
+            Margin = new Thickness(0, 0, 0, 12),
+            Foreground = GetBrush("WarningTextBrush"),
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap
+        };
+    }
+
+    private Button CreateSettingsActionButton(string content, RoutedEventHandler handler, double minWidth)
+    {
+        var button = new Button
+        {
+            Content = content,
+            MinWidth = minWidth,
+            Margin = new Thickness(0, 0, 10, 8),
+            Style = (Style)Application.Current.Resources["ActionButtonStyle"]
+        };
+        button.Click += handler;
+        return button;
+    }
+
+    private void OpenSettingsPanel(bool onboarding = false)
+    {
+        _isOnboardingMode = onboarding;
         _settingsSnapshot = CloneSettings(_settings);
         _isLoadingSettingsUi = true;
         SettingsTitleTextBox.Text = _settings.OverlayTitle;
         SettingsNotesDirectoryTextBox.Text = _settings.NotesDirectory;
         SettingsToggleHotkeyTextBox.Text = _settings.ToggleOverlayHotkey;
         SettingsNewNoteHotkeyTextBox.Text = _settings.NewNoteHotkey;
+        SelectLanguageComboItem(_settings.Language);
         SettingsDimSlider.Value = _settings.OverlayDimOpacity;
         SettingsAccentColorTextBox.Text = _settings.AccentColor;
         UseAccentForSelectionCheckBox.IsChecked = _settings.UseAccentForSelectionOutline;
         SettingsSelectionColorTextBox.Text = _settings.SelectionOutlineColor;
         SettingsAccentPreviewButton.Foreground = (Brush)Application.Current.Resources["AccentBrush"];
         SettingsStatusText.Text = string.Empty;
+        ClearHotkeyErrors();
+        ApplySettingsLanguage();
         SettingsOverlay.Visibility = Visibility.Visible;
         ShowSettingsMainTab();
         _isLoadingSettingsUi = false;
+    }
+
+    private void SelectLanguageComboItem(string language)
+    {
+        if (_settingsLanguageComboBox is null)
+        {
+            return;
+        }
+
+        var normalized = UiText.NormalizeLanguage(language);
+        foreach (ComboBoxItem item in _settingsLanguageComboBox.Items)
+        {
+            if (string.Equals(item.Tag?.ToString(), normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                _settingsLanguageComboBox.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private void ApplySettingsLanguage()
+    {
+        var language = _settings.Language;
+        if (_onboardingIntroText is not null)
+        {
+            _onboardingIntroText.Text = UiText.T(language, "OnboardingIntro");
+            _onboardingIntroText.Visibility = _isOnboardingMode ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        SettingsStatusText.Text = string.Empty;
+        if (_settingsCheckHotkeysButton is not null)
+        {
+            _settingsCheckHotkeysButton.Content = UiText.T(language, "CheckHotkeys");
+        }
+
+        if (_settingsCloseAppButton is not null)
+        {
+            _settingsCloseAppButton.Content = UiText.T(language, "CloseApp");
+        }
+
+        SetLabelBefore(SettingsTitleTextBox, UiText.T(language, "OverlayTitle"));
+        SetLabelBefore(SettingsNotesDirectoryTextBox, UiText.T(language, "NotesFolder"));
+        SetLabelBefore(SettingsToggleHotkeyTextBox, UiText.T(language, "OverlayHotkey"));
+        SetLabelBefore(SettingsNewNoteHotkeyTextBox, UiText.T(language, "NewNoteHotkey"));
+        SetLabelBefore(SettingsDimSlider, UiText.T(language, "DimOpacity"));
+        SetLabelBefore(SettingsAccentColorTextBox, UiText.T(language, "AccentColor"));
+        SetLabelBefore(SettingsSelectionColorTextBox, UiText.T(language, "SelectionColor"));
+        UpdateNotesFolderActionButtons(language);
+        UseAccentForSelectionCheckBox.Content = UiText.T(language, "UseAccentForSelection");
+        SettingsAccentPickerButton.Content = UiText.T(language, "Palette");
+    }
+
+    private void UpdateNotesFolderActionButtons(string language)
+    {
+        if (SettingsMainPanel.Content is not StackPanel panel)
+        {
+            return;
+        }
+
+        var index = panel.Children.IndexOf(SettingsNotesDirectoryTextBox);
+        if (index < 0 || index + 1 >= panel.Children.Count || panel.Children[index + 1] is not WrapPanel buttons)
+        {
+            return;
+        }
+
+        var labels = new[]
+        {
+            UiText.T(language, "ChooseFolder"),
+            UiText.T(language, "CreateDefaultFolder"),
+            UiText.T(language, "FindAutomatically")
+        };
+
+        for (var i = 0; i < labels.Length && i < buttons.Children.Count; i++)
+        {
+            if (buttons.Children[i] is Button button)
+            {
+                button.Content = labels[i];
+            }
+        }
+    }
+
+    private void SetLabelBefore(FrameworkElement element, string text)
+    {
+        if (SettingsMainPanel.Content is not StackPanel panel)
+        {
+            return;
+        }
+
+        var index = panel.Children.IndexOf(element);
+        if (index > 0 && panel.Children[index - 1] is TextBlock label)
+        {
+            label.Text = text;
+        }
+    }
+
+    private void SettingsLanguageComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isLoadingSettingsUi || _settingsLanguageComboBox?.SelectedItem is not ComboBoxItem item)
+        {
+            return;
+        }
+
+        _settings.Language = UiText.NormalizeLanguage(item.Tag?.ToString());
+        ApplySettingsLanguage();
+    }
+
+    private async void SettingsChooseFolderButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var oldValue = _settings.NotesDirectory;
+        _settings.NotesDirectory = SettingsNotesDirectoryTextBox.Text;
+        if (await TryChooseExistingNotesFolderAsync())
+        {
+            SettingsNotesDirectoryTextBox.Text = _settings.NotesDirectory;
+        }
+        else
+        {
+            _settings.NotesDirectory = oldValue;
+        }
+    }
+
+    private void SettingsCreateDefaultFolderButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (TryCreateDefaultNotesFolder(out var path, out var error))
+        {
+            SettingsNotesDirectoryTextBox.Text = path;
+            _settings.NotesDirectory = path;
+            SettingsStatusText.Text = string.Empty;
+        }
+        else
+        {
+            SettingsStatusText.Text = error;
+        }
+    }
+
+    private async void SettingsFindFolderButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var oldValue = _settings.NotesDirectory;
+        if (await TryFindExistingNotesFolderAsync())
+        {
+            SettingsNotesDirectoryTextBox.Text = _settings.NotesDirectory;
+        }
+        else
+        {
+            _settings.NotesDirectory = oldValue;
+        }
+    }
+
+    private void SettingsCheckHotkeysButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!ValidateHotkeyTextBoxes())
+        {
+            return;
+        }
+
+        var candidate = CloneSettings(_settings);
+        candidate.ToggleOverlayHotkey = SettingsToggleHotkeyTextBox.Text.Trim();
+        candidate.NewNoteHotkey = SettingsNewNoteHotkeyTextBox.Text.Trim();
+        candidate.Language = _settings.Language;
+        var errors = _validateHotkeys(candidate);
+        if (errors.Count > 0)
+        {
+            ApplyHotkeyErrors(errors);
+            return;
+        }
+
+        _settings = candidate;
+        SettingsStatusText.Text = UiText.T(_settings.Language, "HotkeyOk");
+        ClearHotkeyErrors();
+    }
+
+    private void ClearHotkeyErrors()
+    {
+        if (_settingsToggleHotkeyErrorText is not null)
+        {
+            _settingsToggleHotkeyErrorText.Text = string.Empty;
+        }
+
+        if (_settingsNewNoteHotkeyErrorText is not null)
+        {
+            _settingsNewNoteHotkeyErrorText.Text = string.Empty;
+        }
+    }
+
+    private void ApplyHotkeyErrors(IReadOnlyList<string> errors)
+    {
+        ClearHotkeyErrors();
+        var language = _settings.Language;
+        var fallback = UiText.T(language, "HotkeyBusy");
+        foreach (var error in errors)
+        {
+            var parts = error.Split('|', 3);
+            var field = parts.Length > 0 ? parts[0] : string.Empty;
+            var message = parts.Length > 1 && parts[1] == "busy"
+                ? fallback
+                : UiText.T(language, "InvalidHotkey");
+
+            if (field == "overlay" && _settingsToggleHotkeyErrorText is not null)
+            {
+                _settingsToggleHotkeyErrorText.Text = message;
+            }
+            else if (field == "new-note" && _settingsNewNoteHotkeyErrorText is not null)
+            {
+                _settingsNewNoteHotkeyErrorText.Text = message;
+            }
+            else
+            {
+                SettingsStatusText.Text = message;
+            }
+        }
+
+        SettingsOverlay.Visibility = Visibility.Visible;
+    }
+
+    private bool ValidateHotkeyTextBoxes()
+    {
+        ClearHotkeyErrors();
+        var isValid = true;
+
+        if (!HotkeyGesture.TryParse(SettingsToggleHotkeyTextBox.Text, out _, out _))
+        {
+            if (_settingsToggleHotkeyErrorText is not null)
+            {
+                _settingsToggleHotkeyErrorText.Text = UiText.T(_settings.Language, "InvalidHotkey");
+            }
+
+            isValid = false;
+        }
+
+        if (!HotkeyGesture.TryParse(SettingsNewNoteHotkeyTextBox.Text, out _, out _))
+        {
+            if (_settingsNewNoteHotkeyErrorText is not null)
+            {
+                _settingsNewNoteHotkeyErrorText.Text = UiText.T(_settings.Language, "InvalidHotkey");
+            }
+
+            isValid = false;
+        }
+
+        return isValid;
     }
 
     private void ShowSettingsMainTab()
@@ -4215,6 +4679,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void SettingsSaveButton_OnClick(object sender, RoutedEventArgs e)
     {
+        if (!ValidateHotkeyTextBoxes())
+        {
+            return;
+        }
+
         if (!TryBuildSettingsFromUi(out var updatedSettings))
         {
             return;
@@ -4223,7 +4692,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var errors = _applySettings(updatedSettings);
         if (errors.Count > 0)
         {
-            SettingsStatusText.Text = string.Join(Environment.NewLine, errors);
+            ApplyHotkeyErrors(errors);
             return;
         }
 
@@ -4240,6 +4709,58 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void SettingsCancelButton_OnClick(object sender, RoutedEventArgs e)
     {
         CancelSettings();
+    }
+
+    private async void CloseAppButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        await RequestCloseApplicationAsync();
+    }
+
+    private async Task RequestCloseApplicationAsync()
+    {
+        if (HasUnsavedSettingsChanges())
+        {
+            var shouldClose = await ShowConfirmAsync(
+                UiText.T(_settings.Language, "CloseApp"),
+                UiText.T(_settings.Language, "CloseWithoutSaving"),
+                UiText.T(_settings.Language, "Close"),
+                UiText.T(_settings.Language, "Cancel"),
+                danger: true);
+
+            if (!shouldClose)
+            {
+                return;
+            }
+        }
+
+        _modalCompletion?.TrySetResult(null);
+        _promptCompletion?.TrySetResult(null);
+        _folderPickerCompletion?.TrySetResult(null);
+        Application.Current.Shutdown(0);
+    }
+
+    private bool HasUnsavedSettingsChanges()
+    {
+        if (SettingsOverlay.Visibility != Visibility.Visible || _settingsSnapshot is null)
+        {
+            return false;
+        }
+
+        var snapshot = _settingsSnapshot;
+        return !StringEquals(SettingsTitleTextBox.Text, snapshot.OverlayTitle) ||
+               !StringEquals(SettingsNotesDirectoryTextBox.Text, snapshot.NotesDirectory) ||
+               !StringEquals(SettingsToggleHotkeyTextBox.Text, snapshot.ToggleOverlayHotkey) ||
+               !StringEquals(SettingsNewNoteHotkeyTextBox.Text, snapshot.NewNoteHotkey) ||
+               !StringEquals(_settings.Language, snapshot.Language) ||
+               !StringEquals(SettingsAccentColorTextBox.Text, snapshot.AccentColor) ||
+               !StringEquals(SettingsSelectionColorTextBox.Text, snapshot.SelectionOutlineColor) ||
+               UseAccentForSelectionCheckBox.IsChecked != snapshot.UseAccentForSelectionOutline ||
+               Math.Abs(SettingsDimSlider.Value - snapshot.OverlayDimOpacity) > 0.0001;
+    }
+
+    private static bool StringEquals(string? left, string? right)
+    {
+        return string.Equals(left?.Trim(), right?.Trim(), StringComparison.Ordinal);
     }
 
     private void CancelSettings()
@@ -4783,9 +5304,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         settings.OverlayTitle = string.IsNullOrWhiteSpace(SettingsTitleTextBox.Text) ? "Мои заметки" : SettingsTitleTextBox.Text.Trim();
-        settings.NotesDirectory = SettingsNotesDirectoryTextBox.Text;
+        var notesDirectory = Environment.ExpandEnvironmentVariables(SettingsNotesDirectoryTextBox.Text.Trim());
+        if (!Directory.Exists(notesDirectory))
+        {
+            SettingsStatusText.Text = UiText.T(_settings.Language, "FolderNotFound");
+            return false;
+        }
+
+        settings.NotesDirectory = notesDirectory;
         settings.ToggleOverlayHotkey = SettingsToggleHotkeyTextBox.Text;
         settings.NewNoteHotkey = SettingsNewNoteHotkeyTextBox.Text;
+        settings.Language = _settings.Language;
+        settings.IsOnboardingComplete = true;
         settings.OverlayDimOpacity = SettingsDimSlider.Value;
         settings.SelectionOutlineColor = SettingsSelectionColorTextBox.Text.Trim();
         settings.AccentColor = SettingsAccentColorTextBox.Text.Trim();
@@ -4809,6 +5339,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             NotesDirectory = settings.NotesDirectory,
             ToggleOverlayHotkey = settings.ToggleOverlayHotkey,
             NewNoteHotkey = settings.NewNoteHotkey,
+            Language = settings.Language,
+            IsOnboardingComplete = settings.IsOnboardingComplete,
             OverlayDimOpacity = settings.OverlayDimOpacity,
             SelectionOutlineColor = settings.SelectionOutlineColor,
             AccentColor = settings.AccentColor,
@@ -5637,7 +6169,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Text = parts[0],
             FontWeight = FontWeights.SemiBold,
             FontSize = 14,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            TextWrapping = TextWrapping.Wrap
         });
 
         if (parts.Length > 1)
@@ -5648,7 +6180,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 Margin = new Thickness(0, 4, 0, 0),
                 FontSize = 12,
                 Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"],
-                TextTrimming = TextTrimming.CharacterEllipsis
+                TextWrapping = TextWrapping.Wrap
             });
         }
 

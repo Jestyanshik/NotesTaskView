@@ -13,6 +13,7 @@ public partial class App : Application
     private UserSettings? _userSettings;
     private NoteService? _noteService;
     private HotkeyManager? _hotkeyManager;
+    private TrayIconService? _trayIconService;
     private MainWindow? _mainWindow;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -34,16 +35,30 @@ public partial class App : Application
             appConfig.NotesFolderPath = _userSettings.NotesDirectory;
 
             _noteService = new NoteService(appConfig);
-            _mainWindow = new MainWindow(_noteService, _userSettingsService, _userSettings, ApplySettings);
+            _mainWindow = new MainWindow(_noteService, _userSettingsService, _userSettings, ApplySettings, ValidateHotkeys);
             MainWindow = _mainWindow;
 
             _hotkeyManager = new HotkeyManager();
             _hotkeyManager.HotkeyPressed += OnHotkeyPressed;
+            _trayIconService = new TrayIconService(
+                Dispatcher,
+                _userSettings,
+                () => _mainWindow!.ShowFromTrayAsync(),
+                () => _mainWindow!.ShowSettingsFromTrayAsync(),
+                () => _mainWindow!.OpenNotesFolderFromTrayAsync(),
+                () => _mainWindow!.OpenConfigFolderFromTrayAsync(),
+                () => _mainWindow!.CloseApplicationFromTrayAsync());
+
+            if (!_userSettings.IsOnboardingComplete)
+            {
+                _ = _mainWindow.ShowOnboardingAsync();
+                return;
+            }
 
             var registerErrors = _hotkeyManager.Register(_userSettings);
             if (registerErrors.Count > 0)
             {
-                _ = _mainWindow.ShowOverlayErrorAsync("NotesTaskView", string.Join(Environment.NewLine, registerErrors));
+                _ = _mainWindow.ShowSettingsWithHotkeyErrorsAsync(registerErrors);
             }
         }
         catch (Exception ex)
@@ -67,14 +82,38 @@ public partial class App : Application
             return registerErrors;
         }
 
+        settings.IsOnboardingComplete = true;
         _userSettingsService.Save(settings);
         _userSettings = settings;
         _noteService.UpdateNotesFolder(settings.NotesDirectory);
+        _trayIconService?.UpdateSettings(settings);
         return [];
+    }
+
+    private List<string> ValidateHotkeys(UserSettings settings)
+    {
+        if (_hotkeyManager is null)
+        {
+            return ["app|unavailable|Settings are not available yet."];
+        }
+
+        var errors = _hotkeyManager.Register(settings);
+        if (_userSettings?.IsOnboardingComplete == true)
+        {
+            _hotkeyManager.Register(_userSettings);
+        }
+        else
+        {
+            _hotkeyManager.UnregisterAll();
+        }
+
+        return errors;
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _trayIconService?.Dispose();
+
         if (_hotkeyManager is not null)
         {
             _hotkeyManager.HotkeyPressed -= OnHotkeyPressed;

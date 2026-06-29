@@ -19,8 +19,21 @@ public sealed class UserSettingsService
 
     public string SettingsPath => _settingsPath;
 
+    public bool LastLoadCreatedDefault { get; private set; }
+
+    public string GetSettingsFilePath()
+    {
+        return _settingsPath;
+    }
+
+    public string GetSettingsDirectoryPath()
+    {
+        return _settingsDirectory;
+    }
+
     public UserSettings Load(AppConfig appConfig)
     {
+        LastLoadCreatedDefault = false;
         var settings = CreateDefaultSettings(appConfig);
 
         if (!File.Exists(_settingsPath))
@@ -32,6 +45,7 @@ public sealed class UserSettingsService
         {
             Directory.CreateDirectory(_settingsDirectory);
             Save(settings);
+            LastLoadCreatedDefault = true;
             return settings;
         }
 
@@ -46,13 +60,24 @@ public sealed class UserSettingsService
                 return settings;
             }
 
+            var isLegacySettings = !json.Contains(nameof(UserSettings.IsOnboardingComplete), StringComparison.Ordinal);
             NormalizeSettings(loaded, settings);
+            if (isLegacySettings &&
+                Directory.Exists(loaded.NotesDirectory) &&
+                IsHotkey(loaded.ToggleOverlayHotkey) &&
+                IsHotkey(loaded.NewNoteHotkey))
+            {
+                loaded.IsOnboardingComplete = true;
+                Save(loaded);
+            }
+
             return loaded;
         }
         catch
         {
             BackupBrokenSettings();
             Save(settings);
+            LastLoadCreatedDefault = true;
             return settings;
         }
     }
@@ -92,6 +117,7 @@ public sealed class UserSettingsService
         settings.NewNoteHotkey = IsHotkey(settings.NewNoteHotkey)
             ? settings.NewNoteHotkey.Trim()
             : defaults.NewNoteHotkey;
+        settings.Language = UiText.NormalizeLanguage(settings.Language);
         settings.OverlayDimOpacity = double.IsFinite(settings.OverlayDimOpacity)
             ? Math.Clamp(settings.OverlayDimOpacity, 0.00, 1.00)
             : defaults.OverlayDimOpacity;
