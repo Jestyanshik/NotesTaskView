@@ -11,6 +11,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\NotesTaskView
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
+PrivilegesRequired=lowest
 OutputDir=..\installer-output
 OutputBaseFilename=NotesTaskViewSetup
 SetupIconFile=..\Assets\app-icon.ico
@@ -18,8 +19,8 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]
 Source: "..\publish\win-x64-self-contained\NotesTaskView.exe"; DestDir: "{app}"; Flags: ignoreversion
